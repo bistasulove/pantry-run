@@ -22,15 +22,15 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: M0 — Scaffold & Infrastructure
+ACTIVE: M1 — Guest Auth & Session Persistence
 ```
 
 Update this line when starting a new milestone. Milestone definitions are in `docs/plan.md` Section 11.
 
 | #   | Milestone                        | Status     |
 | --- | -------------------------------- | ---------- |
-| M0  | Scaffold & Infrastructure        | 🔄 Active  |
-| M1  | Guest Auth & Session Persistence | ⏳ Pending |
+| M0  | Scaffold & Infrastructure        | ✅ Done    |
+| M1  | Guest Auth & Session Persistence | 🔄 Active  |
 | M2  | Household Create & Join          | ⏳ Pending |
 | M3  | Shopping List Core (CRUD)        | ⏳ Pending |
 | M4  | Real-Time Sync                   | ⏳ Pending |
@@ -148,7 +148,7 @@ pantry-run/
 │   │   ├── householdStore.ts         # householdId, name, members
 │   │   └── listStore.ts              # items, optimistic updates
 │   │
-│   └── middleware.ts                 # Auth middleware — protects (app) routes
+│   └── proxy.ts                      # Auth proxy (Next.js 16) — protects (app) routes
 │
 ├── supabase/
 │   └── migrations/
@@ -484,17 +484,17 @@ Subscriptions are set up in `src/hooks/useList.ts` — never inline in component
 
 ```
 App opens
-  → Check localStorage for existing Supabase session
-  → If session exists: restore → check household membership → route to /list or /welcome
+  → SessionProvider checks for existing Supabase session (stored in HttpOnly cookies via @supabase/ssr)
+  → If session exists: hydrate userStore → check household membership (M2) → route to /list or /welcome
   → If no session: call supabase.auth.signInAnonymously()
-               → store session → route to /welcome
+               → cookie set → hydrate userStore → route to /welcome
 
 Anonymous → Full account upgrade (V1.1):
   → supabase.auth.updateUser({ email, password })
   → All existing data remains — user_id is preserved
 ```
 
-The `useSession` hook handles all auth state. Middleware in `src/middleware.ts` protects `(app)` routes.
+The `useSession` hook handles all auth state. The proxy in `src/proxy.ts` protects `(app)` routes.
 
 ---
 

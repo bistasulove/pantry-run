@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Mono, DM_Sans, Plus_Jakarta_Sans } from 'next/font/google'
+
+import { SessionProvider } from '@/components/providers/SessionProvider'
+
 import './globals.css'
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -40,7 +43,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${plusJakarta.variable} ${dmSans.variable} ${dmMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   )
 }
