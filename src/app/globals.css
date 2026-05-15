@@ -1,0 +1,60 @@
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Design tokens — declared once via @theme so Tailwind v4 generates
+ * the matching utilities (e.g. bg-bg-base, text-text-primary, font-display).
+ * Keep CLAUDE.md §10 and this block in sync.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* Colours — light mode is the @theme default; dark overrides below */
+  --color-bg-base: #f7f6f3;
+  --color-bg-surface: #ffffff;
+  --color-text-primary: #1c1c1a;
+  --color-text-secondary: #6b6860;
+  --color-accent: #3d8055;
+  --color-destructive: #c0392b;
+  --color-border-default: #e4e2dc;
+
+  /* Font families — actual font files loaded via next/font in layout.tsx,
+     which sets --font-plus-jakarta / --font-dm-sans / --font-dm-mono on <html> */
+  --font-sans: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* Easings */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Dark mode — overrides the @theme defaults via the same CSS variables.
+   Tailwind utilities (bg-bg-base, etc.) automatically pick up the new values. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-base: #18181a;
+    --color-bg-surface: #242426;
+    --color-text-primary: #f0efec;
+    --color-text-secondary: #9e9a92;
+    --color-border-default: #2e2e30;
+  }
+}
+
+/* Respect users who prefer reduced motion — required by CLAUDE.md §17 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html,
+body {
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
