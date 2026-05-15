@@ -37,6 +37,7 @@ yarn-error.log*
 # claude
 CLAUDE.local.md
 .claude/
+scratchpad.md
 
 # vercel
 .vercel

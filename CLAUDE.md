@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: M1 — Guest Auth & Session Persistence
+ACTIVE: none — M2 shipped, awaiting kickoff for M3 (Shopping List Core)
 ```
 
 Update this line when starting a new milestone. Milestone definitions are in `docs/plan.md` Section 11.
@@ -30,8 +30,8 @@ Update this line when starting a new milestone. Milestone definitions are in `do
 | #   | Milestone                        | Status     |
 | --- | -------------------------------- | ---------- |
 | M0  | Scaffold & Infrastructure        | ✅ Done    |
-| M1  | Guest Auth & Session Persistence | 🔄 Active  |
-| M2  | Household Create & Join          | ⏳ Pending |
+| M1  | Guest Auth & Session Persistence | ✅ Done    |
+| M2  | Household Create & Join          | ✅ Done    |
 | M3  | Shopping List Core (CRUD)        | ⏳ Pending |
 | M4  | Real-Time Sync                   | ⏳ Pending |
 | M5  | Offline Support                  | ⏳ Pending |

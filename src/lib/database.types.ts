@@ -188,11 +188,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_household: {
+        Args: { p_display_name?: string; p_name: string }
+        Returns: Json
+      }
+      gen_invite_code: { Args: never; Returns: string }
       is_household_member: {
         Args: { p_household_id: string }
         Returns: boolean
       }
       is_household_owner: { Args: { p_household_id: string }; Returns: boolean }
+      join_household_by_code: {
+        Args: { p_display_name?: string; p_invite_code: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
@@ -328,3 +337,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
