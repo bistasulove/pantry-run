@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -54,8 +54,15 @@ export default function JoinPage() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // Display name is mandatory and lives in the in-memory userStore. A direct
+  // hit or refresh on this route bypasses /welcome, so re-route there to
+  // collect a name before joining.
+  useEffect(() => {
+    if (!displayName) router.replace('/welcome')
+  }, [displayName, router])
+
   const rawCode = code.replace(/[^A-Za-z0-9]/g, '')
-  const canSubmit = rawCode.length === 6 && isAuthenticated && !submitting
+  const canSubmit = rawCode.length === 6 && isAuthenticated && !submitting && !!displayName
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -67,9 +74,13 @@ export default function JoinPage() {
     setSubmitting(true)
 
     const supabase = createClient()
+    if (!displayName) {
+      router.replace('/welcome')
+      return
+    }
     const { data, error: rpcError } = await supabase.rpc('join_household_by_code', {
       p_invite_code: rawCode,
-      ...(displayName ? { p_display_name: displayName } : {}),
+      p_display_name: displayName,
     })
 
     if (rpcError) {

@@ -1,7 +1,7 @@
 'use client'
 
 import { Check, Copy, Share2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 
 import { Button } from '@/components/ui/Button'
 
@@ -16,9 +16,21 @@ function formatCode(code: string): string {
   return `${clean.slice(0, 3)}-${clean.slice(3)}`
 }
 
+// Capability detection that survives SSR hydration. getServerSnapshot drives
+// the initial client render so it matches the server; React then transitions
+// to getSnapshot post-hydration.
+const noopSubscribe = () => () => {}
+function getCanShareClient() {
+  return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+}
+function getCanShareServer() {
+  return false
+}
+
 export function InviteCode({ code, householdName }: InviteCodeProps) {
   const [copied, setCopied] = useState(false)
   const formatted = formatCode(code)
+  const canShare = useSyncExternalStore(noopSubscribe, getCanShareClient, getCanShareServer)
 
   async function copyToClipboard() {
     try {
@@ -47,8 +59,6 @@ export function InviteCode({ code, householdName }: InviteCodeProps) {
     }
     await copyToClipboard()
   }
-
-  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
 
   return (
     <div className="flex flex-col items-center gap-4">

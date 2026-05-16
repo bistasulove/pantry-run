@@ -101,6 +101,7 @@ export type Database = {
       list_items: {
         Row: {
           added_by: string | null
+          added_by_name: string | null
           category: string
           checked_at: string | null
           checked_by: string | null
@@ -116,6 +117,7 @@ export type Database = {
         }
         Insert: {
           added_by?: string | null
+          added_by_name?: string | null
           category?: string
           checked_at?: string | null
           checked_by?: string | null
@@ -131,6 +133,7 @@ export type Database = {
         }
         Update: {
           added_by?: string | null
+          added_by_name?: string | null
           category?: string
           checked_at?: string | null
           checked_by?: string | null
@@ -200,6 +203,11 @@ export type Database = {
       is_household_owner: { Args: { p_household_id: string }; Returns: boolean }
       join_household_by_code: {
         Args: { p_display_name?: string; p_invite_code: string }
+        Returns: Json
+      }
+      leave_household: { Args: { p_new_owner_user_id?: string }; Returns: Json }
+      regenerate_invite_code: {
+        Args: { p_household_id: string }
         Returns: Json
       }
     }
@@ -337,4 +345,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

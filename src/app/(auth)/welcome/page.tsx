@@ -13,9 +13,12 @@ export default function WelcomePage() {
   const setDisplayName = useUserStore((state) => state.setDisplayName)
   const [name, setName] = useState(storedName)
 
+  const trimmedName = name.trim().slice(0, 40)
+  const isValid = trimmedName.length > 0
+
   function persistAndGo(path: '/create' | '/join') {
-    const trimmed = name.trim().slice(0, 40)
-    setDisplayName(trimmed || null)
+    if (!isValid) return
+    setDisplayName(trimmedName)
     router.push(path)
   }
 
@@ -33,18 +36,29 @@ export default function WelcomePage() {
 
         <Input
           label="Your first name"
-          hint="Optional. Shown next to items you add."
+          hint="Shown next to items you add so other members know who's who."
           autoComplete="given-name"
           maxLength={40}
+          required
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
         <div className="flex flex-col gap-2">
-          <Button onClick={() => persistAndGo('/create')} variant="primary" fullWidth>
+          <Button
+            onClick={() => persistAndGo('/create')}
+            variant="primary"
+            fullWidth
+            disabled={!isValid}
+          >
             Create a household
           </Button>
-          <Button onClick={() => persistAndGo('/join')} variant="secondary" fullWidth>
+          <Button
+            onClick={() => persistAndGo('/join')}
+            variant="secondary"
+            fullWidth
+            disabled={!isValid}
+          >
             Join with a code
           </Button>
         </div>

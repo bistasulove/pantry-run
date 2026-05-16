@@ -1,12 +1,14 @@
 import { redirect } from 'next/navigation'
 
+import { AppShell } from '@/components/layout/AppShell'
 import { HouseholdHydrator } from '@/components/providers/HouseholdHydrator'
 import { createClient } from '@/lib/supabase/server'
 import type { Member } from '@/store/householdStore'
 
 // Server-side gate for the (app) routes. Without a household membership the
 // user has nothing to render, so we route them back to /welcome. With a
-// membership we hydrate the household store before children mount.
+// membership we fetch the default list id + members and hydrate before
+// children mount.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
 
@@ -29,18 +31,25 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/welcome')
   }
 
-  const [{ data: household }, { data: memberRows }] = await Promise.all([
+  const [{ data: household }, { data: memberRows }, { data: list }] = await Promise.all([
     supabase.from('households').select('id, name').eq('id', membership.household_id).single(),
     supabase
       .from('household_members')
       .select('user_id, role, display_name, joined_at')
       .eq('household_id', membership.household_id)
       .order('joined_at', { ascending: true }),
+    supabase
+      .from('lists')
+      .select('id')
+      .eq('household_id', membership.household_id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ])
 
-  if (!household) {
-    // Membership row points at a household that's gone (or RLS blocked us).
-    // Treat as no household and re-onboard.
+  if (!household || !list) {
+    // Membership points at a household that's gone, or the default list row
+    // is missing (RPC should have created it). Re-onboard.
     redirect('/welcome')
   }
 
@@ -52,8 +61,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }))
 
   return (
-    <HouseholdHydrator householdId={household.id} name={household.name} members={members}>
-      {children}
+    <HouseholdHydrator
+      householdId={household.id}
+      name={household.name}
+      listId={list.id}
+      members={members}
+    >
+      <AppShell>{children}</AppShell>
     </HouseholdHydrator>
   )
 }

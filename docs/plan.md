@@ -457,7 +457,7 @@ The first user-facing feature and the entire collaboration model. Until two peop
 - Onboarding screens built and styled: Welcome → Create or Join
 - **Create flow:** Enter household name → household row created in DB → 6-char invite code generated and displayed → "Share" triggers Web Share API → "Go to my list" navigates to list
 - **Join flow:** Enter invite code (auto-uppercase, auto-format `HH-XXXX`) → validates against DB → joins household → navigates to list
-- Invite code expiry: codes expire 24 hours after generation (DB trigger or Edge Function)
+- Invite code expiry: codes expire 7 days after generation (bumped from 24h in M3.5 F4 after real-world testing — see §11 M3.5). Owners can regenerate on demand via the household screen.
 - Error states: code not found, code expired, already a member
 - `household_members` row created on create/join
 - `useHousehold` hook returns current household and members
@@ -488,6 +488,26 @@ The heart of the app. No real-time sync yet — just a working list that persist
 - Edit item bottom sheet: name, quantity, category override, note, delete
 
 **Done when:** One person can fully manage a grocery list — add, check off, edit, delete items — and the data survives a page refresh.
+
+---
+
+### M3.5 — Testing & Feedback
+
+**~1–2 days**
+
+Post-M3 polish driven by real two-person testing. Not a feature milestone in the original 8-step plan — inserted retroactively to bundle the friction points surfaced by initial household testing before M4's realtime work begins.
+
+**Deliverables:**
+
+- **Display name is mandatory.** Welcome screen's Create/Join CTAs disabled until a name is entered. `/create` and `/join` redirect back to `/welcome` if the in-memory `userStore.displayName` is missing (covers refresh / direct hits). Settings page's Save is disabled when blank.
+- **Missing-name banner.** App shell renders a one-tap "Set your name" CTA for any returning member whose `household_members.display_name` is null (covers anonymous joins from before the F1 enforcement landed).
+- **"Added by X" attribution in the edit sheet.** `EditItemSheet` looks up the adder via `useHousehold().members + useSession().userId`. List rows stay clean — attribution only surfaces on tap.
+- **Snapshot column + trigger so attribution survives a member leaving.** New `list_items.added_by_name text` column. `BEFORE DELETE` trigger on `household_members` snapshots the leaver's `display_name` onto every item they added in that household. After the row is gone, `EditItemSheet` renders "Added by Sarah (former member)".
+- **Leave household — self.** Destructive section at the bottom of `/settings`. New `leave_household(p_new_owner_user_id uuid default null)` RPC handles four cases atomically: non-owner leaves, owner alone (cascade-deletes the household), owner with successor (atomic role-swap + leave), owner without successor (returns `needs_transfer` so the client opens the picker). Statuses: `left`, `transferred_and_left`, `needs_transfer`, `invalid_successor`, `not_a_member`, `unauthenticated`.
+- **Remove member — owner.** Small × button next to each non-self member on `/household` (owners only). Two-step: × opens a confirm sheet → "Remove [Name]" destructive button. Client-side `.delete()` on `household_members`; RLS policy `household_members_delete_self_or_owner` already covers it.
+- **Regenerate invite code + 7-day default (F4).** M2 set a 24-hour expiry and no regen path, which made every household more than a day old unjoinable. Fixed two ways: (a) bumped `create_household` default from 24h to 7 days, and (b) new `regenerate_invite_code(p_household_id)` SECURITY DEFINER RPC, owner-only, same alphabet + collision retry as `gen_invite_code`. The `/household` screen now branches on `isExpired × isOwner`: fresh code → existing display + a low-key "Rotate code" affordance for owners; expired + owner → prominent "Generate new code" button; expired + non-owner → "Ask [Owner Name] to generate a new code." Expiry is computed on the server and passed as a boolean prop to avoid hydration drift.
+
+**Done when:** A two-person household can swap ownership and leave cleanly. The departing owner's items keep their attribution as "Added by X (former member)". Owners can revive an expired invite code without help.
 
 ---
 
@@ -593,12 +613,15 @@ The difference between "works on my machine" and something you'd confidently han
 | M1        | Guest auth & session persistence | 2–3       | 6               |
 | M2        | Household create & join          | 3–4       | 10              |
 | M3        | Shopping list core (CRUD)        | 4–5       | 15              |
-| M4        | Real-time sync                   | 3–4       | 19              |
-| M5        | Offline support                  | 3         | 22              |
-| M6        | PWA polish & install             | 2–3       | 25              |
-| M7        | QA, edge cases & launch          | 3–4       | 29              |
+| M3.5      | Testing & feedback               | 1–2       | 16              |
+| M4        | Real-time sync                   | 3–4       | 20              |
+| M5        | Offline support                  | 3         | 23              |
+| M6        | PWA polish & install             | 2–3       | 26              |
+| M7        | QA, edge cases & launch          | 3–4       | 30              |
 
 **Total: ~4–5 weeks** working evenings and weekends as a solo developer.
+
+> **Note on M3.5.** Not part of the original 8-step plan. Inserted retroactively after M3 to capture friction from real two-person testing — see the milestone's own deliverables above for the full list. Future milestones may grow similar `Mx.5` companions as feedback warrants.
 
 ---
 
@@ -701,7 +724,7 @@ AdMob is free to integrate — it pays you per impression. Expected CPM in Austr
 | ----------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------- |
 | Users don't bother inviting — one person still uses it solo | High       | High   | Make the onboarding invite flow seamless (share via WhatsApp in 2 taps)                                  |
 | Real-time sync lag frustrates users                         | Medium     | High   | Optimistic updates make it feel instant even if server is slow                                           |
-| Invite code abuse (strangers joining household)             | Low        | Medium | Codes expire after 24 hours or 1 use; add "approve join request" in V1.1                                 |
+| Invite code abuse (strangers joining household)             | Low        | Medium | Codes expire after 7 days and owners can rotate on demand (M3.5 F4); add "approve join request" in V1.1  |
 | Supabase free tier limits hit early                         | Low        | Medium | Free tier supports 500MB DB and 50K MAU — plenty for early users; upgrade to Pro ($25/mo) when needed    |
 | iOS users can't find the install prompt                     | Medium     | Medium | Onboarding screen with explicit Safari-specific instructions; "Add to Home Screen" nudge after first use |
 | Safari clears PWA storage under iOS memory pressure         | Low        | Medium | Keep offline cache minimal; sync frequently; show clear "last synced" indicator                          |

@@ -22,21 +22,22 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M2 shipped, awaiting kickoff for M3 (Shopping List Core)
+ACTIVE: none — M3.5 shipped (incl. F4 invite-code regen), awaiting kickoff for M4 (Real-Time Sync)
 ```
 
 Update this line when starting a new milestone. Milestone definitions are in `docs/plan.md` Section 11.
 
-| #   | Milestone                        | Status     |
-| --- | -------------------------------- | ---------- |
-| M0  | Scaffold & Infrastructure        | ✅ Done    |
-| M1  | Guest Auth & Session Persistence | ✅ Done    |
-| M2  | Household Create & Join          | ✅ Done    |
-| M3  | Shopping List Core (CRUD)        | ⏳ Pending |
-| M4  | Real-Time Sync                   | ⏳ Pending |
-| M5  | Offline Support                  | ⏳ Pending |
-| M6  | PWA Polish & Install             | ⏳ Pending |
-| M7  | QA, Edge Cases & Launch          | ⏳ Pending |
+| #    | Milestone                        | Status     |
+| ---- | -------------------------------- | ---------- |
+| M0   | Scaffold & Infrastructure        | ✅ Done    |
+| M1   | Guest Auth & Session Persistence | ✅ Done    |
+| M2   | Household Create & Join          | ✅ Done    |
+| M3   | Shopping List Core (CRUD)        | ✅ Done    |
+| M3.5 | Testing & Feedback               | ✅ Done    |
+| M4   | Real-Time Sync                   | ⏳ Pending |
+| M5   | Offline Support                  | ⏳ Pending |
+| M6   | PWA Polish & Install             | ⏳ Pending |
+| M7   | QA, Edge Cases & Launch          | ⏳ Pending |
 
 ---
 
@@ -205,7 +206,7 @@ Four tables, all with Row Level Security (RLS) enabled.
 households
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid()
   name          text NOT NULL
-  invite_code   text UNIQUE NOT NULL    -- 6-char alphanumeric, expires 24h
+  invite_code   text UNIQUE NOT NULL    -- 6-char alphanumeric, expires after 7 days (M3.5 F4); owners can regenerate at any time
   code_expires_at timestamptz NOT NULL
   created_at    timestamptz DEFAULT now()
 

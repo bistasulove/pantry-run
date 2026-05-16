@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { InviteCode } from '@/components/household/InviteCode'
 import { Button } from '@/components/ui/Button'
@@ -46,6 +46,13 @@ export default function CreatePage() {
   const [submitting, setSubmitting] = useState(false)
   const [created, setCreated] = useState<CreatedHousehold | null>(null)
 
+  // Display name is mandatory and lives in the in-memory userStore. A direct
+  // hit or refresh on this route bypasses /welcome, so re-route there to
+  // collect a name before creating.
+  useEffect(() => {
+    if (!displayName) router.replace('/welcome')
+  }, [displayName, router])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = name.trim()
@@ -60,10 +67,14 @@ export default function CreatePage() {
     setError(null)
     setSubmitting(true)
 
+    if (!displayName) {
+      router.replace('/welcome')
+      return
+    }
     const supabase = createClient()
     const { data, error: rpcError } = await supabase.rpc('create_household', {
       p_name: trimmed,
-      ...(displayName ? { p_display_name: displayName } : {}),
+      p_display_name: displayName,
     })
 
     if (rpcError) {
