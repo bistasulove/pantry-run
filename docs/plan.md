@@ -277,13 +277,13 @@ When subscriptions and in-app purchases are needed, the codebase migrates to Rea
 
 ### 7.4 Infrastructure & DevOps
 
-| Layer              | Choice             | Reason                                                               |
-| ------------------ | ------------------ | -------------------------------------------------------------------- |
-| Hosting (Frontend) | **Vercel**         | Free hobby tier. Deploys on every git push. Global CDN.              |
-| Hosting (Backend)  | **Supabase Cloud** | Managed. Free tier is generous for early users.                      |
-| CI/CD              | **GitHub Actions** | Run tests and lint on pull requests; auto-deploy to Vercel on merge. |
-| Monitoring         | **Sentry**         | Error tracking and performance for both PWA and future native app.   |
-| Analytics          | **PostHog**        | Open source. Track feature adoption without giving data to Google.   |
+| Layer              | Choice              | Reason                                                                                 |
+| ------------------ | ------------------- | -------------------------------------------------------------------------------------- |
+| Hosting (Frontend) | **Vercel**          | Free hobby tier. Deploys on every git push. Global CDN.                                |
+| Hosting (Backend)  | **Supabase Cloud**  | Managed. Free tier is generous for early users.                                        |
+| CI/CD              | **GitHub Actions**  | Run tests and lint on pull requests; auto-deploy to Vercel on merge.                   |
+| Monitoring         | **Sentry** _(V1.1)_ | Error tracking and performance. Deferred to end of V1.1 to keep V1 surface area small. |
+| Analytics          | **PostHog**         | Open source. Track feature adoption without giving data to Google.                     |
 
 ---
 
@@ -594,7 +594,6 @@ The difference between "works on my machine" and something you'd confidently han
   - Item name is very long (100+ characters)
   - Keyboard dismissed mid-animation
 - React error boundaries added around list and household screens
-- Sentry installed; unhandled errors verified in the Sentry dashboard
 - Lighthouse audit: Performance ≥ 85, Accessibility ≥ 90, Best Practices ≥ 90, PWA ✓
 - Accessibility failures from audit fixed
 - Cross-browser tested: Chrome (Android), Safari (iOS), Chrome (desktop), Safari (desktop), Firefox (desktop)
@@ -639,6 +638,7 @@ V1.1 — PWA (Weeks 7–12)
   └── Activity feed ("who added what, when")
   └── Full auth — email + Google Sign-In, account recovery
   └── Push notifications (Android PWA; iOS 16.4+ PWA only)
+  └── Sentry — error tracking + source-map upload (deferred from M7)
 
 V2 — PWA + Begin Native Prep (Months 4–6)
   └── Recurring items / smart suggestions

@@ -19,10 +19,38 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
 
     previouslyFocused.current = document.activeElement as HTMLElement | null
 
+    function getFocusable(): HTMLElement[] {
+      const panel = panelRef.current
+      if (!panel) return []
+      const selector =
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      return Array.from(panel.querySelectorAll<HTMLElement>(selector)).filter(
+        (el) => !el.hasAttribute('aria-hidden') && el.offsetParent !== null,
+      )
+    }
+
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault()
         onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const focusable = getFocusable()
+      if (focusable.length === 0) {
+        e.preventDefault()
+        panelRef.current?.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
       }
     }
     document.addEventListener('keydown', onKey)

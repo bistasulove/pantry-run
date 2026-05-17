@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -10,6 +10,13 @@ import { createClient } from '@/lib/supabase/client'
 import { useUserStore } from '@/store/userStore'
 
 type JoinStatus = 'ok' | 'already_member' | 'expired' | 'not_found'
+
+// Soft client-side throttle so a fat-fingered user can't hammer the RPC. Five
+// wrong attempts inside the window forces a 30s pause. Resets on a successful
+// join or a fresh page load.
+const FAILED_ATTEMPT_LIMIT = 5
+const ATTEMPT_WINDOW_MS = 60_000
+const COOLDOWN_MS = 30_000
 
 interface JoinResult {
   status: JoinStatus
@@ -53,6 +60,16 @@ export default function JoinPage() {
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [cooldownRemaining, setCooldownRemaining] = useState(0)
+  const failedAttempts = useRef<number[]>([])
+
+  useEffect(() => {
+    if (cooldownRemaining <= 0) return
+    const t = setInterval(() => {
+      setCooldownRemaining((s) => Math.max(0, s - 1))
+    }, 1000)
+    return () => clearInterval(t)
+  }, [cooldownRemaining])
 
   // Display name is mandatory and lives in the in-memory userStore. A direct
   // hit or refresh on this route bypasses /welcome, so re-route there to
@@ -62,10 +79,25 @@ export default function JoinPage() {
   }, [displayName, router])
 
   const rawCode = code.replace(/[^A-Za-z0-9]/g, '')
-  const canSubmit = rawCode.length === 6 && isAuthenticated && !submitting && !!displayName
+  const inCooldown = cooldownRemaining > 0
+  const canSubmit =
+    rawCode.length === 6 && isAuthenticated && !submitting && !!displayName && !inCooldown
+
+  function recordFailure() {
+    const now = Date.now()
+    failedAttempts.current = [
+      ...failedAttempts.current.filter((t) => now - t < ATTEMPT_WINDOW_MS),
+      now,
+    ]
+    if (failedAttempts.current.length >= FAILED_ATTEMPT_LIMIT) {
+      failedAttempts.current = []
+      setCooldownRemaining(Math.ceil(COOLDOWN_MS / 1000))
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (inCooldown) return
     if (rawCode.length !== 6) {
       setError('Codes are 6 characters long.')
       return
@@ -87,6 +119,7 @@ export default function JoinPage() {
       console.error('[join] RPC failed', rpcError)
       setError('Something went wrong. Try again.')
       setSubmitting(false)
+      recordFailure()
       return
     }
 
@@ -94,22 +127,26 @@ export default function JoinPage() {
     if (!result) {
       setError('Unexpected response from the server. Try again.')
       setSubmitting(false)
+      recordFailure()
       return
     }
 
     switch (result.status) {
       case 'ok':
       case 'already_member':
+        failedAttempts.current = []
         router.refresh()
         router.push('/list')
         return
       case 'expired':
         setError('That code has expired. Ask for a new one.')
         setSubmitting(false)
+        recordFailure()
         return
       case 'not_found':
         setError("We couldn't find that code. Double-check and try again.")
         setSubmitting(false)
+        recordFailure()
         return
     }
   }
@@ -135,14 +172,23 @@ export default function JoinPage() {
           maxLength={7}
           value={code}
           onChange={(e) => setCode(formatCodeInput(e.target.value))}
-          error={error}
+          error={
+            inCooldown ? `Too many tries — wait ${cooldownRemaining}s before retrying.` : error
+          }
           autoFocus
+          disabled={inCooldown}
           className="text-center font-mono tracking-[0.3em] tabular-nums"
         />
 
         <div className="flex flex-col gap-2">
           <Button type="submit" variant="primary" fullWidth disabled={!canSubmit}>
-            {submitting ? 'Joining…' : isAuthenticated ? 'Join household' : 'Connecting…'}
+            {inCooldown
+              ? `Wait ${cooldownRemaining}s…`
+              : submitting
+                ? 'Joining…'
+                : isAuthenticated
+                  ? 'Join household'
+                  : 'Connecting…'}
           </Button>
           <Button
             type="button"

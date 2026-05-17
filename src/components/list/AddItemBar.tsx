@@ -7,11 +7,15 @@ interface AddItemBarProps {
   onAdd: (name: string) => void | Promise<void>
 }
 
+const MAX_NAME_LEN = 100
+const COUNTER_THRESHOLD = 80
+
 export function AddItemBar({ onAdd }: AddItemBarProps) {
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [keyboardOffset, setKeyboardOffset] = useState(0)
+  const showCounter = value.length >= COUNTER_THRESHOLD
 
   // Visual Viewport API: lift the add bar above the on-screen keyboard on iOS.
   useEffect(() => {
@@ -68,13 +72,25 @@ export function AddItemBar({ onAdd }: AddItemBarProps) {
           autoComplete="off"
           autoCorrect="on"
           autoCapitalize="sentences"
-          maxLength={200}
+          maxLength={MAX_NAME_LEN}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Add an item…"
           aria-label="Add an item"
+          aria-describedby={showCounter ? 'add-item-counter' : undefined}
           className="bg-bg-base border-border-default text-text-primary placeholder:text-text-secondary focus-visible:outline-accent block min-h-[44px] w-full rounded-xl border px-4 text-[16px] leading-relaxed focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
         />
+        {showCounter ? (
+          <span
+            id="add-item-counter"
+            aria-live="polite"
+            className={`text-[12px] leading-snug tabular-nums ${
+              value.length >= MAX_NAME_LEN ? 'text-destructive' : 'text-text-secondary'
+            }`}
+          >
+            {value.length}/{MAX_NAME_LEN}
+          </span>
+        ) : null}
         <button
           type="submit"
           aria-label="Add item"

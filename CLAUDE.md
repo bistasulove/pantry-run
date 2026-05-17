@@ -22,22 +22,22 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M6 shipped, awaiting kickoff for M7 (QA, Edge Cases & Launch)
+ACTIVE: none — M7 shipped, V1 launched
 ```
 
 Update this line when starting a new milestone. Milestone definitions are in `docs/plan.md` Section 11.
 
-| #    | Milestone                        | Status     |
-| ---- | -------------------------------- | ---------- |
-| M0   | Scaffold & Infrastructure        | ✅ Done    |
-| M1   | Guest Auth & Session Persistence | ✅ Done    |
-| M2   | Household Create & Join          | ✅ Done    |
-| M3   | Shopping List Core (CRUD)        | ✅ Done    |
-| M3.5 | Testing & Feedback               | ✅ Done    |
-| M4   | Real-Time Sync                   | ✅ Done    |
-| M5   | Offline Support                  | ✅ Done    |
-| M6   | PWA Polish & Install             | ✅ Done    |
-| M7   | QA, Edge Cases & Launch          | ⏳ Pending |
+| #    | Milestone                        | Status  |
+| ---- | -------------------------------- | ------- |
+| M0   | Scaffold & Infrastructure        | ✅ Done |
+| M1   | Guest Auth & Session Persistence | ✅ Done |
+| M2   | Household Create & Join          | ✅ Done |
+| M3   | Shopping List Core (CRUD)        | ✅ Done |
+| M3.5 | Testing & Feedback               | ✅ Done |
+| M4   | Real-Time Sync                   | ✅ Done |
+| M5   | Offline Support                  | ✅ Done |
+| M6   | PWA Polish & Install             | ✅ Done |
+| M7   | QA, Edge Cases & Launch          | ✅ Done |
 
 ---
 
@@ -81,7 +81,7 @@ npx supabase gen types typescript --local > src/lib/database.types.ts  # Regener
 | Offline    | hand-rolled SW + idb                | `public/sw.js` (no Workbox / next-pwa) + IndexedDB queue & cache                |
 | Icons      | Lucide React                        | `lucide-react` package                                                          |
 | Fonts      | Plus Jakarta Sans, DM Sans, DM Mono | Via `next/font/google`                                                          |
-| Monitoring | Sentry                              | Error tracking                                                                  |
+| Monitoring | _(deferred to end of V1.1)_         | Sentry will be wired in once V1.1 stabilises                                    |
 | Hosting    | Vercel                              | Auto-deploy on push to `main`                                                   |
 
 ---
@@ -188,11 +188,9 @@ pantry-run/
 # Required — get from Supabase dashboard → Settings → API
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-
-# Optional — from Sentry dashboard
-SENTRY_DSN=
-NEXT_PUBLIC_SENTRY_DSN=
 ```
+
+> Sentry env vars (`SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`) will be added at the end of V1.1 when Sentry is wired in. Not used in V1.
 
 Never commit `.env.local`. Never hardcode these values in any file.
 

@@ -13,7 +13,7 @@
  * without requiring a full reload.
  */
 
-const CACHE_VERSION = 'v1'
+const CACHE_VERSION = 'v2'
 const STATIC_CACHE = `pantry-run-static-${CACHE_VERSION}`
 const SHELL_CACHE = `pantry-run-shell-${CACHE_VERSION}`
 
@@ -114,6 +114,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Internal API routes are pass-through. They're potentially state-bearing
+  // (health probes, future RPCs) and shouldn't be served stale — defensive
+  // default that future /api/* additions inherit automatically.
+  if (url.pathname.startsWith('/api/')) return
+
   // HTML navigations — keep fresh, but fall back to cached shell offline.
   const acceptsHtml = request.headers.get('accept')?.includes('text/html')
   if (request.mode === 'navigate' || acceptsHtml) {
@@ -121,8 +126,6 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Everything else (same-origin XHR/fetch hitting our own API routes): default
-  // to network with cache fallback. Our only /api/* is /api/health, which is
-  // fine to cache opportunistically.
+  // Everything else same-origin: SWR for the snappy repeat-load benefit.
   event.respondWith(staleWhileRevalidate(request, STATIC_CACHE))
 })

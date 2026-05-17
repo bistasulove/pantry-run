@@ -114,10 +114,10 @@ export function ListItem({ item, onToggle, onEdit, onDelete }: ListItemProps) {
           type="button"
           onClick={handleBodyClick}
           aria-label={`Edit ${item.name}`}
-          className="flex min-h-[44px] flex-1 items-center gap-2 pr-4 text-left"
+          className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 py-2 pr-4 text-left"
         >
           <span
-            className={`text-text-primary ease-out-expo text-[16px] leading-relaxed transition-opacity duration-[250ms] ${
+            className={`text-text-primary ease-out-expo min-w-0 flex-1 text-[16px] leading-relaxed break-words transition-opacity duration-[250ms] ${
               item.is_checked ? 'text-text-secondary line-through opacity-70' : ''
             }`}
           >
