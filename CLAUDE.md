@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M5 shipped, awaiting kickoff for M6 (PWA Polish & Install)
+ACTIVE: none — M6 shipped, awaiting kickoff for M7 (QA, Edge Cases & Launch)
 ```
 
 Update this line when starting a new milestone. Milestone definitions are in `docs/plan.md` Section 11.
@@ -36,7 +36,7 @@ Update this line when starting a new milestone. Milestone definitions are in `do
 | M3.5 | Testing & Feedback               | ✅ Done    |
 | M4   | Real-Time Sync                   | ✅ Done    |
 | M5   | Offline Support                  | ✅ Done    |
-| M6   | PWA Polish & Install             | ⏳ Pending |
+| M6   | PWA Polish & Install             | ✅ Done    |
 | M7   | QA, Edge Cases & Launch          | ⏳ Pending |
 
 ---
@@ -78,7 +78,7 @@ npx supabase gen types typescript --local > src/lib/database.types.ts  # Regener
 | Database   | Supabase (PostgreSQL)               | Via `@supabase/supabase-js` v2                                                  |
 | Real-time  | Supabase Realtime                   | WebSocket subscriptions                                                         |
 | Auth       | Supabase Auth                       | Anonymous → email/Google upgrade                                                |
-| Offline    | next-pwa + idb                      | Service worker + IndexedDB                                                      |
+| Offline    | hand-rolled SW + idb                | `public/sw.js` (no Workbox / next-pwa) + IndexedDB queue & cache                |
 | Icons      | Lucide React                        | `lucide-react` package                                                          |
 | Fonts      | Plus Jakarta Sans, DM Sans, DM Mono | Via `next/font/google`                                                          |
 | Monitoring | Sentry                              | Error tracking                                                                  |

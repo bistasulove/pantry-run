@@ -1,5 +1,6 @@
 import { BottomNav } from '@/components/layout/BottomNav'
 import { Header } from '@/components/layout/Header'
+import { InstallBanner } from '@/components/layout/InstallBanner'
 import { MissingNameBanner } from '@/components/layout/MissingNameBanner'
 import { OfflineBanner } from '@/components/layout/OfflineBanner'
 import { HouseholdMembersRealtime } from '@/components/providers/HouseholdMembersRealtime'
@@ -20,6 +21,7 @@ export function AppShell({ children }: AppShellProps) {
       <Header />
       <MissingNameBanner />
       <OfflineBanner />
+      <InstallBanner />
       <HouseholdMembersRealtime />
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       <BottomNav />

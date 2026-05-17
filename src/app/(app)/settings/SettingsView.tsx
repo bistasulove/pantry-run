@@ -3,6 +3,7 @@
 import { useState } from 'react'
 
 import { LeaveHouseholdSection } from '@/components/settings/LeaveHouseholdSection'
+import { ThemeToggle } from '@/components/settings/ThemeToggle'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Toast, type ToastOptions } from '@/components/ui/Toast'
@@ -64,6 +65,8 @@ export function SettingsView({ memberRowId, initialDisplayName }: SettingsViewPr
       <Button onClick={handleSave} variant="primary" fullWidth disabled={!canSave}>
         {saving ? 'Saving…' : 'Save'}
       </Button>
+
+      <ThemeToggle />
 
       <LeaveHouseholdSection />
 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Mono, DM_Sans, Plus_Jakarta_Sans } from 'next/font/google'
 
+import { ServiceWorkerRegistrar } from '@/components/providers/ServiceWorkerRegistrar'
 import { SessionProvider } from '@/components/providers/SessionProvider'
 
 import './globals.css'
@@ -27,14 +28,38 @@ const dmMono = DM_Mono({
 export const metadata: Metadata = {
   title: 'Pantry Run',
   description: 'A real-time collaborative shopping list for households.',
+  manifest: '/manifest.json',
+  applicationName: 'Pantry Run',
+  appleWebApp: {
+    capable: true,
+    title: 'Pantry Run',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    icon: [
+      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#3D8055',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#F7F6F3' },
+    { media: '(prefers-color-scheme: dark)', color: '#18181A' },
+  ],
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
 }
+
+// Inline script that runs before React hydrates — reads the persisted theme
+// from localStorage and sets data-theme on <html> so painted colours match
+// the user's saved preference instead of flashing the default light theme.
+// Kept minified inline because anything async would defeat the purpose.
+const THEME_PRE_HYDRATION_SCRIPT = `(function(){try{var t=localStorage.getItem('pantry-run:theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`
 
 export default function RootLayout({
   children,
@@ -43,7 +68,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${plusJakarta.variable} ${dmSans.variable} ${dmMono.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_PRE_HYDRATION_SCRIPT }} />
+      </head>
       <body>
+        <ServiceWorkerRegistrar />
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
