@@ -3,12 +3,17 @@
 import { useEffect, useState } from 'react'
 
 import { useHouseholdStore, type Member } from '@/store/householdStore'
+import { useUserStore } from '@/store/userStore'
 
 interface HouseholdHydratorProps {
   householdId: string
   name: string
   listId: string
   members: Member[]
+  // Server-side user id from the (app) layout — known synchronously, unlike
+  // userStore.userId which only populates after SessionProvider's bootstrap
+  // effect runs. Used to find this user's own row and seed displayName.
+  currentUserId: string
   children: React.ReactNode
 }
 
@@ -32,11 +37,19 @@ export function HouseholdHydrator({
   name,
   listId,
   members,
+  currentUserId,
   children,
 }: HouseholdHydratorProps) {
   // Seed synchronously on first render so children read the hydrated state.
+  // Also seed userStore.displayName from the user's own member row — without
+  // this, returning users have displayName=null until they visit Settings,
+  // which silently breaks presence broadcasts.
   useState(() => {
     useHouseholdStore.getState().setHousehold({ householdId, name, listId, members })
+    const self = members.find((m) => m.userId === currentUserId)
+    if (self) {
+      useUserStore.getState().setDisplayName(self.displayName)
+    }
     return null
   })
 
@@ -56,7 +69,11 @@ export function HouseholdHydrator({
       return
     }
     state.setHousehold({ householdId, name, listId, members })
-  }, [householdId, name, listId, members])
+    const self = members.find((m) => m.userId === currentUserId)
+    if (self) {
+      useUserStore.getState().setDisplayName(self.displayName)
+    }
+  }, [householdId, name, listId, members, currentUserId])
 
   return <>{children}</>
 }

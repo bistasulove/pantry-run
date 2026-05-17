@@ -66,6 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       name={household.name}
       listId={list.id}
       members={members}
+      currentUserId={user.id}
     >
       <AppShell>{children}</AppShell>
     </HouseholdHydrator>
