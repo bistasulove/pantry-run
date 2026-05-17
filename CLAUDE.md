@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M4 shipped, awaiting kickoff for M5 (Offline Support)
+ACTIVE: none — M5 shipped, awaiting kickoff for M6 (PWA Polish & Install)
 ```
 
 Update this line when starting a new milestone. Milestone definitions are in `docs/plan.md` Section 11.
@@ -35,7 +35,7 @@ Update this line when starting a new milestone. Milestone definitions are in `do
 | M3   | Shopping List Core (CRUD)        | ✅ Done    |
 | M3.5 | Testing & Feedback               | ✅ Done    |
 | M4   | Real-Time Sync                   | ✅ Done    |
-| M5   | Offline Support                  | ⏳ Pending |
+| M5   | Offline Support                  | ✅ Done    |
 | M6   | PWA Polish & Install             | ⏳ Pending |
 | M7   | QA, Edge Cases & Launch          | ⏳ Pending |
 

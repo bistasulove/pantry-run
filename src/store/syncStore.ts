@@ -9,13 +9,20 @@ interface SyncStore {
   // SyncIndicator reads this to drive the green check flash. Failed writes
   // don't stamp this — a failed offline add shouldn't flash success.
   lastSuccessAt: number | null
+  // Number of operations sitting in the IndexedDB write queue waiting for the
+  // network. Mirror of the on-disk count — kept in sync by useList via
+  // setQueuedCount after every enqueue / drain step. OfflineBanner reads this
+  // to render "Syncing N change(s)…".
+  queuedCount: number
   beginWrite: () => void
   endWrite: (success: boolean) => void
+  setQueuedCount: (count: number) => void
 }
 
 export const useSyncStore = create<SyncStore>((set) => ({
   pendingCount: 0,
   lastSuccessAt: null,
+  queuedCount: 0,
   beginWrite: () => set((state) => ({ pendingCount: state.pendingCount + 1 })),
   endWrite: (success) =>
     set((state) => {
@@ -25,4 +32,5 @@ export const useSyncStore = create<SyncStore>((set) => ({
       }
       return { pendingCount: next }
     }),
+  setQueuedCount: (queuedCount) => set({ queuedCount: Math.max(0, queuedCount) }),
 }))

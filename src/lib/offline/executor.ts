@@ -1,0 +1,81 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import type { Database } from '@/lib/database.types'
+
+import type { QueuedOp } from './queue'
+
+type Client = SupabaseClient<Database>
+
+export type ExecResult =
+  | { ok: true }
+  // Network-shaped failure: drain stops here; record stays at the head and we
+  // try again on the next online/SUBSCRIBED transition.
+  | { ok: false; kind: 'network'; error: unknown }
+  // Server rejected the op (RLS, missing row, bad payload). Drain removes the
+  // record and surfaces a toast — retrying won't help.
+  | { ok: false; kind: 'rejected'; error: unknown }
+
+// A TypeError from fetch (network down, DNS, etc.) is what Supabase surfaces
+// when offline. PostgrestError has a `code` field — anything from there is a
+// server-side rejection and shouldn't loop.
+function classify(error: unknown): 'network' | 'rejected' {
+  if (error instanceof TypeError) return 'network'
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string' &&
+    /failed to fetch|network|load failed/i.test((error as { message: string }).message) &&
+    // PostgrestError uses 'message' too; differentiate via 'code'/'details' presence.
+    !('code' in error)
+  ) {
+    return 'network'
+  }
+  return 'rejected'
+}
+
+export async function runQueuedOp(client: Client, op: QueuedOp): Promise<ExecResult> {
+  try {
+    if (op.kind === 'insert') {
+      const r = op.row
+      const { error } = await client.from('list_items').insert({
+        id: r.id,
+        list_id: r.list_id,
+        added_by: r.added_by ?? undefined,
+        name: r.name,
+        quantity: r.quantity,
+        category: r.category,
+        is_checked: r.is_checked,
+        checked_by: r.checked_by,
+        checked_at: r.checked_at,
+        note: r.note,
+        sort_order: r.sort_order,
+      })
+      if (error) return { ok: false, kind: classify(error), error }
+      return { ok: true }
+    }
+
+    if (op.kind === 'update') {
+      const { error } = await client.from('list_items').update(op.patch).eq('id', op.id)
+      if (error) return { ok: false, kind: classify(error), error }
+      return { ok: true }
+    }
+
+    if (op.kind === 'delete') {
+      const { error } = await client.from('list_items').delete().eq('id', op.id)
+      if (error) return { ok: false, kind: classify(error), error }
+      return { ok: true }
+    }
+
+    // clearChecked
+    const { error } = await client
+      .from('list_items')
+      .delete()
+      .eq('list_id', op.listId)
+      .eq('is_checked', true)
+    if (error) return { ok: false, kind: classify(error), error }
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, kind: classify(error), error }
+  }
+}

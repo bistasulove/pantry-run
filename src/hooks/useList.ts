@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 
 import { detectCategory } from '@/lib/categories'
+import { loadListSnapshot, saveListSnapshot } from '@/lib/offline/cache'
+import { runQueuedOp } from '@/lib/offline/executor'
+import { enqueue, peekHead, queueLength, removeHead, type QueuedOp } from '@/lib/offline/queue'
 import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/lib/database.types'
 import { useHouseholdStore } from '@/store/householdStore'
@@ -24,6 +27,71 @@ export interface UseListApi {
   clearChecked: () => Promise<ListItem[]>
 }
 
+// A TypeError from fetch (DNS, offline, socket reset) is the universal sign
+// that the write didn't reach the server. PostgrestError carries a `code`
+// field — those are real rejections that should roll back, not queue.
+function isNetworkError(error: unknown): boolean {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true
+  if (error instanceof TypeError) return true
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    !('code' in error) &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string' &&
+    /failed to fetch|network|load failed/i.test((error as { message: string }).message)
+  ) {
+    return true
+  }
+  return false
+}
+
+async function refreshQueuedCount(): Promise<void> {
+  const n = await queueLength()
+  useSyncStore.getState().setQueuedCount(n)
+}
+
+async function pushToQueue(op: QueuedOp): Promise<void> {
+  await enqueue(op)
+  await refreshQueuedCount()
+}
+
+// Module-scoped mutex so concurrent triggers (online event + SUBSCRIBED
+// reconnect firing close together) don't double-drain.
+let isDraining = false
+
+async function drainQueue(onAfterDrain?: () => void): Promise<void> {
+  if (isDraining) return
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return
+  isDraining = true
+  try {
+    const client = createClient()
+    while (true) {
+      const head = await peekHead()
+      if (!head) break
+      const result = await runQueuedOp(client, head.op)
+      if (result.ok) {
+        await removeHead(head.id)
+        await refreshQueuedCount()
+        continue
+      }
+      if (result.kind === 'network') {
+        // Bail; head stays in place. Next online/SUBSCRIBED transition retries.
+        break
+      }
+      // Server rejected the op (RLS, missing row, bad payload). Retrying will
+      // never succeed — drop it and let the post-drain refetch reconcile the
+      // store with whatever the server's truth is.
+      console.warn('[drainQueue] dropping rejected op', head.op, result.error)
+      await removeHead(head.id)
+      await refreshQueuedCount()
+    }
+  } finally {
+    isDraining = false
+    if (typeof onAfterDrain === 'function') onAfterDrain()
+  }
+}
+
 export function useList(): UseListApi {
   const listId = useHouseholdStore((state) => state.listId)
   const userId = useUserStore((state) => state.userId)
@@ -38,6 +106,12 @@ export function useList(): UseListApi {
     itemsRef.current = items
   }, [items])
 
+  // Surface initial queue depth on mount so the offline banner reflects state
+  // even before the first write or reconnect.
+  useEffect(() => {
+    void refreshQueuedCount()
+  }, [])
+
   useEffect(() => {
     if (!listId) return
     let cancelled = false
@@ -45,6 +119,20 @@ export function useList(): UseListApi {
     const supabase = createClient()
 
     useListStore.getState().setLoading(true)
+
+    // Hydrate from the IndexedDB snapshot immediately. If we're offline this
+    // is what the user sees; if we're online it's a near-instant first paint
+    // that the network fetch then reconciles.
+    void (async () => {
+      const cached = await loadListSnapshot(listId)
+      if (cancelled || !cached) return
+      // Don't clobber a server fetch that landed first — only hydrate if the
+      // store is still empty + loading.
+      const state = useListStore.getState()
+      if (state.items.length === 0 && state.isLoading) {
+        state.setItems(cached)
+      }
+    })()
 
     async function fetchAndReconcile() {
       const { data, error } = await supabase
@@ -55,7 +143,11 @@ export function useList(): UseListApi {
       if (cancelled) return
       if (error) {
         console.error('[useList] fetch failed', error)
-        if (isInitialFetch) useListStore.getState().setItems([])
+        // Initial-fetch failure with no cache → empty list. Cache hydrate
+        // above will have populated the store if a snapshot existed.
+        if (isInitialFetch && useListStore.getState().items.length === 0) {
+          useListStore.getState().setItems([])
+        }
         return
       }
       const rows = data ?? []
@@ -65,12 +157,13 @@ export function useList(): UseListApi {
       } else {
         useListStore.getState().reconcileWithServer(rows)
       }
+      void saveListSnapshot(listId!, rows)
     }
 
     // Subscribe first, then fetch from inside the SUBSCRIBED callback. This
     // removes the "events arrived during the gap between fetch and subscribe"
-    // failure mode. On reconnect SUBSCRIBED fires again → we refetch and
-    // reconcile (catches anything missed while the socket was down).
+    // failure mode. On reconnect SUBSCRIBED fires again → we drain any queued
+    // writes, then refetch and reconcile.
     const channel = supabase
       .channel(`list:${listId}`)
       .on(
@@ -83,9 +176,6 @@ export function useList(): UseListApi {
         },
         (payload) => {
           const row = payload.new as ListItem
-          // Only flash items that weren't already in the store — our own
-          // optimistic adds put the id there before the realtime echo arrives,
-          // so this naturally suppresses self-echo flashing.
           const isEcho = useListStore.getState().items.some((i) => i.id === row.id)
           useListStore.getState().addItemOptimistic(row)
           if (!isEcho) {
@@ -118,15 +208,18 @@ export function useList(): UseListApi {
           filter: `list_id=eq.${listId}`,
         },
         (payload) => {
-          // REPLICA IDENTITY FULL is set in M0, so payload.old contains the
-          // full row — id is guaranteed.
           const old = payload.old as { id?: string }
           if (old.id) useListStore.getState().removeItemOptimistic(old.id)
         },
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED' && !cancelled) {
-          void fetchAndReconcile()
+          // Drain first so our own offline writes land before the refetch
+          // captures server state — otherwise the refetch could clobber a
+          // queued optimistic add that's still in the store.
+          void drainQueue(() => {
+            if (!cancelled) void fetchAndReconcile()
+          })
         }
       })
 
@@ -135,6 +228,18 @@ export function useList(): UseListApi {
       void supabase.removeChannel(channel)
     }
   }, [listId])
+
+  // Drain on `online` transition. SUBSCRIBED also drains, but the realtime
+  // socket can take a beat to flip after the network returns — kicking off
+  // a drain immediately on the OS-level event makes reconnect feel snappy.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleOnline = () => {
+      void drainQueue()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [])
 
   const addItem = useCallback(
     async (rawName: string) => {
@@ -180,11 +285,23 @@ export function useList(): UseListApi {
       try {
         const { error } = await supabase.from('list_items').insert(payload)
         if (error) {
+          if (isNetworkError(error)) {
+            await pushToQueue({ kind: 'insert', row: optimistic })
+            // Optimistic add stays in the store — the realtime echo (after
+            // drain) will be deduped via the id-presence check.
+            return
+          }
           console.error('[useList] add failed', error)
           useListStore.getState().removeItemOptimistic(id)
           throw error
         }
         succeeded = true
+      } catch (error) {
+        if (isNetworkError(error)) {
+          await pushToQueue({ kind: 'insert', row: optimistic })
+          return
+        }
+        throw error
       } finally {
         useSyncStore.getState().endWrite(succeeded)
       }
@@ -218,6 +335,18 @@ export function useList(): UseListApi {
       try {
         const { error } = await supabase.from('list_items').update(update).eq('id', id)
         if (error) {
+          if (isNetworkError(error)) {
+            await pushToQueue({
+              kind: 'update',
+              id,
+              patch: {
+                is_checked: update.is_checked!,
+                checked_by: update.checked_by ?? null,
+                checked_at: update.checked_at ?? null,
+              },
+            })
+            return
+          }
           console.error('[useList] toggle failed', error)
           useListStore.getState().updateItemOptimistic(id, {
             is_checked: current.is_checked,
@@ -227,6 +356,20 @@ export function useList(): UseListApi {
           throw error
         }
         succeeded = true
+      } catch (error) {
+        if (isNetworkError(error)) {
+          await pushToQueue({
+            kind: 'update',
+            id,
+            patch: {
+              is_checked: update.is_checked!,
+              checked_by: update.checked_by ?? null,
+              checked_at: update.checked_at ?? null,
+            },
+          })
+          return
+        }
+        throw error
       } finally {
         useSyncStore.getState().endWrite(succeeded)
       }
@@ -252,6 +395,10 @@ export function useList(): UseListApi {
       try {
         const { error } = await supabase.from('list_items').update(next).eq('id', id)
         if (error) {
+          if (isNetworkError(error)) {
+            await pushToQueue({ kind: 'update', id, patch: next })
+            return
+          }
           console.error('[useList] update failed', error)
           useListStore.getState().updateItemOptimistic(id, {
             name: current.name,
@@ -260,6 +407,12 @@ export function useList(): UseListApi {
           throw error
         }
         succeeded = true
+      } catch (error) {
+        if (isNetworkError(error)) {
+          await pushToQueue({ kind: 'update', id, patch: next })
+          return
+        }
+        throw error
       } finally {
         useSyncStore.getState().endWrite(succeeded)
       }
@@ -279,11 +432,21 @@ export function useList(): UseListApi {
     try {
       const { error } = await supabase.from('list_items').delete().eq('id', id)
       if (error) {
+        if (isNetworkError(error)) {
+          await pushToQueue({ kind: 'delete', id })
+          return current
+        }
         console.error('[useList] delete failed', error)
         useListStore.getState().addItemOptimistic(current)
         throw error
       }
       succeeded = true
+    } catch (error) {
+      if (isNetworkError(error)) {
+        await pushToQueue({ kind: 'delete', id })
+        return current
+      }
+      throw error
     } finally {
       useSyncStore.getState().endWrite(succeeded)
     }
@@ -312,11 +475,21 @@ export function useList(): UseListApi {
     try {
       const { error } = await supabase.from('list_items').insert(payload)
       if (error) {
+        if (isNetworkError(error)) {
+          await pushToQueue({ kind: 'insert', row: item })
+          return
+        }
         console.error('[useList] undo-delete failed', error)
         useListStore.getState().removeItemOptimistic(item.id)
         throw error
       }
       succeeded = true
+    } catch (error) {
+      if (isNetworkError(error)) {
+        await pushToQueue({ kind: 'insert', row: item })
+        return
+      }
+      throw error
     } finally {
       useSyncStore.getState().endWrite(succeeded)
     }
@@ -341,6 +514,10 @@ export function useList(): UseListApi {
         .eq('list_id', listId)
         .eq('is_checked', true)
       if (error) {
+        if (isNetworkError(error)) {
+          await pushToQueue({ kind: 'clearChecked', listId })
+          return checked
+        }
         console.error('[useList] clear-checked failed', error)
         for (const item of checked) {
           useListStore.getState().addItemOptimistic(item)
@@ -348,6 +525,12 @@ export function useList(): UseListApi {
         throw error
       }
       succeeded = true
+    } catch (error) {
+      if (isNetworkError(error)) {
+        await pushToQueue({ kind: 'clearChecked', listId })
+        return checked
+      }
+      throw error
     } finally {
       useSyncStore.getState().endWrite(succeeded)
     }
