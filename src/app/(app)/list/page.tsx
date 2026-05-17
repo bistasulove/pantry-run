@@ -121,8 +121,8 @@ export default function ListPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <div aria-live="polite" aria-busy={isLoading} className="flex-1 overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div aria-live="polite" aria-busy={isLoading} className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex flex-col gap-3 px-4 py-6">
             <Skeleton className="h-6 w-32" />

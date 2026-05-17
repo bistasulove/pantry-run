@@ -45,7 +45,7 @@ export function HouseholdView({
   const ownerLabel = owner?.displayName?.trim() || 'the owner'
 
   return (
-    <div className="flex flex-col gap-8 px-4 py-6">
+    <div className="flex h-full flex-col gap-8 overflow-y-auto px-4 py-6">
       <header className="flex flex-col gap-1">
         <h2 className="font-display text-text-primary text-[24px] leading-snug font-bold">
           {name}

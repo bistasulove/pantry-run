@@ -10,7 +10,7 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   return (
     <div
-      className="bg-bg-base text-text-primary flex min-h-dvh flex-col"
+      className="bg-bg-base text-text-primary flex h-dvh flex-col overflow-hidden"
       style={{
         paddingTop: 'env(safe-area-inset-top)',
         overscrollBehaviorY: 'contain',
@@ -19,7 +19,7 @@ export function AppShell({ children }: AppShellProps) {
       <Header />
       <MissingNameBanner />
       <HouseholdMembersRealtime />
-      <main className="flex flex-1 flex-col">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       <BottomNav />
     </div>
   )
