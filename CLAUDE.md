@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M3.5 shipped (incl. F4 invite-code regen), awaiting kickoff for M4 (Real-Time Sync)
+ACTIVE: none — M4 shipped, awaiting kickoff for M5 (Offline Support)
 ```
 
 Update this line when starting a new milestone. Milestone definitions are in `docs/plan.md` Section 11.
@@ -34,7 +34,7 @@ Update this line when starting a new milestone. Milestone definitions are in `do
 | M2   | Household Create & Join          | ✅ Done    |
 | M3   | Shopping List Core (CRUD)        | ✅ Done    |
 | M3.5 | Testing & Feedback               | ✅ Done    |
-| M4   | Real-Time Sync                   | ⏳ Pending |
+| M4   | Real-Time Sync                   | ✅ Done    |
 | M5   | Offline Support                  | ⏳ Pending |
 | M6   | PWA Polish & Install             | ⏳ Pending |
 | M7   | QA, Edge Cases & Launch          | ⏳ Pending |

@@ -4,6 +4,9 @@ import { Users } from 'lucide-react'
 
 import { useHousehold } from '@/hooks/useHousehold'
 
+import { PresenceIndicator } from './PresenceIndicator'
+import { SyncIndicator } from './SyncIndicator'
+
 export function Header() {
   const { name, members } = useHousehold()
   const memberCount = members.length
@@ -14,14 +17,18 @@ export function Header() {
         <h1 className="font-display text-text-primary truncate text-[20px] leading-snug font-semibold">
           {name ?? 'Your household'}
         </h1>
-        <div
-          aria-label={`${memberCount} member${memberCount === 1 ? '' : 's'}`}
-          className="bg-bg-surface border-border-default text-text-secondary flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] leading-snug"
-        >
-          <Users size={18} strokeWidth={1.5} aria-hidden />
-          <span className="tabular-nums">{memberCount}</span>
+        <div className="flex items-center gap-2">
+          <SyncIndicator />
+          <div
+            aria-label={`${memberCount} member${memberCount === 1 ? '' : 's'}`}
+            className="bg-bg-surface border-border-default text-text-secondary flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] leading-snug"
+          >
+            <Users size={18} strokeWidth={1.5} aria-hidden />
+            <span className="tabular-nums">{memberCount}</span>
+          </div>
         </div>
       </div>
+      <PresenceIndicator />
     </header>
   )
 }

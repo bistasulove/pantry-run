@@ -58,3 +58,19 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Realtime INSERT flash — applied by ListItem to an inline overlay div when
+   listStore.freshlySyncedIds contains the item id. The global reduced-motion
+   override at line 43 already neutralises this animation. */
+@keyframes flash-left-border {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.flash-left-border {
+  animation: flash-left-border 1500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

@@ -3,7 +3,7 @@
 import { Check, Trash2 } from 'lucide-react'
 import { useRef, useState, type PointerEvent } from 'react'
 
-import type { ListItem as ListItemType } from '@/store/listStore'
+import { useListStore, type ListItem as ListItemType } from '@/store/listStore'
 
 interface ListItemProps {
   item: ListItemType
@@ -21,6 +21,7 @@ export function ListItem({ item, onToggle, onEdit, onDelete }: ListItemProps) {
   const startX = useRef<number | null>(null)
   const pointerId = useRef<number | null>(null)
   const moved = useRef(false)
+  const isFresh = useListStore((s) => s.freshlySyncedIds.has(item.id))
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -124,6 +125,17 @@ export function ListItem({ item, onToggle, onEdit, onDelete }: ListItemProps) {
           </span>
         </button>
       </div>
+
+      {/* Realtime INSERT flash overlay. Placed after the body div so it sits
+          above the body's white background — the body has transform:translateX
+          which creates a stacking context, so a ::before pseudo on the <li>
+          would render underneath. */}
+      {isFresh ? (
+        <div
+          aria-hidden
+          className="bg-accent flash-left-border pointer-events-none absolute inset-y-0 left-0 z-10 w-[3px]"
+        />
+      ) : null}
     </li>
   )
 }

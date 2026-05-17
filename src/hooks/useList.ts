@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/lib/database.types'
 import { useHouseholdStore } from '@/store/householdStore'
 import { useListStore, type ListItem } from '@/store/listStore'
+import { useSyncStore } from '@/store/syncStore'
 import { useUserStore } from '@/store/userStore'
 
 type ListItemInsert = Database['public']['Tables']['list_items']['Insert']
@@ -40,27 +41,98 @@ export function useList(): UseListApi {
   useEffect(() => {
     if (!listId) return
     let cancelled = false
+    let isInitialFetch = true
     const supabase = createClient()
 
     useListStore.getState().setLoading(true)
 
-    supabase
-      .from('list_items')
-      .select('*')
-      .eq('list_id', listId)
-      .order('sort_order', { ascending: true })
-      .then(({ data, error }) => {
-        if (cancelled) return
-        if (error) {
-          console.error('[useList] initial fetch failed', error)
-          useListStore.getState().setItems([])
-          return
+    async function fetchAndReconcile() {
+      const { data, error } = await supabase
+        .from('list_items')
+        .select('*')
+        .eq('list_id', listId!)
+        .order('sort_order', { ascending: true })
+      if (cancelled) return
+      if (error) {
+        console.error('[useList] fetch failed', error)
+        if (isInitialFetch) useListStore.getState().setItems([])
+        return
+      }
+      const rows = data ?? []
+      if (isInitialFetch) {
+        useListStore.getState().setItems(rows)
+        isInitialFetch = false
+      } else {
+        useListStore.getState().reconcileWithServer(rows)
+      }
+    }
+
+    // Subscribe first, then fetch from inside the SUBSCRIBED callback. This
+    // removes the "events arrived during the gap between fetch and subscribe"
+    // failure mode. On reconnect SUBSCRIBED fires again → we refetch and
+    // reconcile (catches anything missed while the socket was down).
+    const channel = supabase
+      .channel(`list:${listId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'list_items',
+          filter: `list_id=eq.${listId}`,
+        },
+        (payload) => {
+          const row = payload.new as ListItem
+          // Only flash items that weren't already in the store — our own
+          // optimistic adds put the id there before the realtime echo arrives,
+          // so this naturally suppresses self-echo flashing.
+          const isEcho = useListStore.getState().items.some((i) => i.id === row.id)
+          useListStore.getState().addItemOptimistic(row)
+          if (!isEcho) {
+            useListStore.getState().markFresh(row.id)
+            window.setTimeout(() => {
+              useListStore.getState().clearFresh(row.id)
+            }, 1500)
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'list_items',
+          filter: `list_id=eq.${listId}`,
+        },
+        (payload) => {
+          const row = payload.new as ListItem
+          useListStore.getState().updateItemOptimistic(row.id, row)
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'list_items',
+          filter: `list_id=eq.${listId}`,
+        },
+        (payload) => {
+          // REPLICA IDENTITY FULL is set in M0, so payload.old contains the
+          // full row — id is guaranteed.
+          const old = payload.old as { id?: string }
+          if (old.id) useListStore.getState().removeItemOptimistic(old.id)
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED' && !cancelled) {
+          void fetchAndReconcile()
         }
-        useListStore.getState().setItems(data ?? [])
       })
 
     return () => {
       cancelled = true
+      void supabase.removeChannel(channel)
     }
   }, [listId])
 
@@ -103,11 +175,18 @@ export function useList(): UseListApi {
         sort_order: maxSort + 1,
       }
 
-      const { error } = await supabase.from('list_items').insert(payload)
-      if (error) {
-        console.error('[useList] add failed', error)
-        useListStore.getState().removeItemOptimistic(id)
-        throw error
+      useSyncStore.getState().beginWrite()
+      let succeeded = false
+      try {
+        const { error } = await supabase.from('list_items').insert(payload)
+        if (error) {
+          console.error('[useList] add failed', error)
+          useListStore.getState().removeItemOptimistic(id)
+          throw error
+        }
+        succeeded = true
+      } finally {
+        useSyncStore.getState().endWrite(succeeded)
       }
     },
     [listId, userId],
@@ -134,15 +213,22 @@ export function useList(): UseListApi {
         checked_by: nextChecked ? (userId ?? null) : null,
         checked_at: nextChecked ? now : null,
       }
-      const { error } = await supabase.from('list_items').update(update).eq('id', id)
-      if (error) {
-        console.error('[useList] toggle failed', error)
-        useListStore.getState().updateItemOptimistic(id, {
-          is_checked: current.is_checked,
-          checked_by: current.checked_by,
-          checked_at: current.checked_at,
-        })
-        throw error
+      useSyncStore.getState().beginWrite()
+      let succeeded = false
+      try {
+        const { error } = await supabase.from('list_items').update(update).eq('id', id)
+        if (error) {
+          console.error('[useList] toggle failed', error)
+          useListStore.getState().updateItemOptimistic(id, {
+            is_checked: current.is_checked,
+            checked_by: current.checked_by,
+            checked_at: current.checked_at,
+          })
+          throw error
+        }
+        succeeded = true
+      } finally {
+        useSyncStore.getState().endWrite(succeeded)
       }
     },
     [userId],
@@ -161,14 +247,21 @@ export function useList(): UseListApi {
       const supabase = createClient()
       useListStore.getState().updateItemOptimistic(id, next)
 
-      const { error } = await supabase.from('list_items').update(next).eq('id', id)
-      if (error) {
-        console.error('[useList] update failed', error)
-        useListStore.getState().updateItemOptimistic(id, {
-          name: current.name,
-          category: current.category,
-        })
-        throw error
+      useSyncStore.getState().beginWrite()
+      let succeeded = false
+      try {
+        const { error } = await supabase.from('list_items').update(next).eq('id', id)
+        if (error) {
+          console.error('[useList] update failed', error)
+          useListStore.getState().updateItemOptimistic(id, {
+            name: current.name,
+            category: current.category,
+          })
+          throw error
+        }
+        succeeded = true
+      } finally {
+        useSyncStore.getState().endWrite(succeeded)
       }
     },
     [],
@@ -181,11 +274,18 @@ export function useList(): UseListApi {
     const supabase = createClient()
     useListStore.getState().removeItemOptimistic(id)
 
-    const { error } = await supabase.from('list_items').delete().eq('id', id)
-    if (error) {
-      console.error('[useList] delete failed', error)
-      useListStore.getState().addItemOptimistic(current)
-      throw error
+    useSyncStore.getState().beginWrite()
+    let succeeded = false
+    try {
+      const { error } = await supabase.from('list_items').delete().eq('id', id)
+      if (error) {
+        console.error('[useList] delete failed', error)
+        useListStore.getState().addItemOptimistic(current)
+        throw error
+      }
+      succeeded = true
+    } finally {
+      useSyncStore.getState().endWrite(succeeded)
     }
     return current
   }, [])
@@ -207,11 +307,18 @@ export function useList(): UseListApi {
       note: item.note,
       sort_order: item.sort_order,
     }
-    const { error } = await supabase.from('list_items').insert(payload)
-    if (error) {
-      console.error('[useList] undo-delete failed', error)
-      useListStore.getState().removeItemOptimistic(item.id)
-      throw error
+    useSyncStore.getState().beginWrite()
+    let succeeded = false
+    try {
+      const { error } = await supabase.from('list_items').insert(payload)
+      if (error) {
+        console.error('[useList] undo-delete failed', error)
+        useListStore.getState().removeItemOptimistic(item.id)
+        throw error
+      }
+      succeeded = true
+    } finally {
+      useSyncStore.getState().endWrite(succeeded)
     }
   }, [])
 
@@ -225,17 +332,24 @@ export function useList(): UseListApi {
       useListStore.getState().removeItemOptimistic(item.id)
     }
 
-    const { error } = await supabase
-      .from('list_items')
-      .delete()
-      .eq('list_id', listId)
-      .eq('is_checked', true)
-    if (error) {
-      console.error('[useList] clear-checked failed', error)
-      for (const item of checked) {
-        useListStore.getState().addItemOptimistic(item)
+    useSyncStore.getState().beginWrite()
+    let succeeded = false
+    try {
+      const { error } = await supabase
+        .from('list_items')
+        .delete()
+        .eq('list_id', listId)
+        .eq('is_checked', true)
+      if (error) {
+        console.error('[useList] clear-checked failed', error)
+        for (const item of checked) {
+          useListStore.getState().addItemOptimistic(item)
+        }
+        throw error
       }
-      throw error
+      succeeded = true
+    } finally {
+      useSyncStore.getState().endWrite(succeeded)
     }
     return checked
   }, [listId])
