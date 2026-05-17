@@ -212,7 +212,15 @@ export function useList(): UseListApi {
           if (old.id) useListStore.getState().removeItemOptimistic(old.id)
         },
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
+        // Log every status transition. The realtime client only auto-recovers
+        // from some failure modes — silent dead-channel bugs are easier to
+        // diagnose with this trace in the console.
+        if (err) {
+          console.warn(`[useList] channel ${status}:`, err)
+        } else if (status !== 'SUBSCRIBED') {
+          console.info(`[useList] channel status: ${status}`)
+        }
         if (status === 'SUBSCRIBED' && !cancelled) {
           // Drain first so our own offline writes land before the refetch
           // captures server state — otherwise the refetch could clobber a
@@ -223,8 +231,24 @@ export function useList(): UseListApi {
         }
       })
 
+    // Tab-backgrounding closes WebSockets on iOS Safari and (aggressively)
+    // mobile Chrome. The realtime client *should* auto-reconnect → SUBSCRIBED
+    // → existing resync. But sometimes the reconnect stalls in CHANNEL_ERROR /
+    // TIMED_OUT and never emits SUBSCRIBED again, and events that fired in the
+    // gap are lost forever (Supabase doesn't buffer per-client). Forcing a
+    // REST resync on every visible-transition is the safe net: cheap, works
+    // even if the socket is dead, idempotent if it isn't.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' || cancelled) return
+      void drainQueue(() => {
+        if (!cancelled) void fetchAndReconcile()
+      })
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       void supabase.removeChannel(channel)
     }
   }, [listId])
