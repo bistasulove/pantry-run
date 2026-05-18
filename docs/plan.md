@@ -624,6 +624,180 @@ The difference between "works on my machine" and something you'd confidently han
 
 ---
 
+## 11.5. V1.1 Milestone Breakdown
+
+V1 shipped with ~10 active households. Feedback from those households reshaped the V1.1 scope: data-loss anxiety and "I retype milk every shopping trip" dominated the asks. The original V1.1 list (activity feed, push notifications) had zero user demand and was dropped — both deferred to V2.
+
+V1.1 has seven milestones, themed **Continuity & Trust**. Each is independently deployable. They must be completed in order — M10 (Multiple Lists) lands before M11/M12 so the recurring + history features are built list-aware from day one.
+
+---
+
+### M8 — Item Quantity & Notes
+
+**~2–3 days**
+
+The smallest V1.1 feature — `list_items.quantity` and `list_items.note` columns already exist from M3. This milestone surfaces them with an optional, structured UI that supports common units without forcing every user to fill them in.
+
+**Deliverables:**
+
+- **Quantity:** structured `value + unit` UI in the edit sheet — numeric input + unit picker. Supported units: `g`, `kg`, `mL`, `L`, `piece`, `can`, `dozen`. The unit list is hard-coded for V1.1; no custom units.
+- **Optional by design.** Items added via the quick-add bar have no quantity. Quantity only renders on the list row when set — otherwise the item name shows alone, identical to today. Keeps the list visually quiet by default.
+- **Schema decision (locked at M8 kickoff):** either keep `quantity text` and store formatted strings (e.g. `"2 kg"`), or split into `quantity_value numeric` + `quantity_unit text`. Structured is more future-proof (sort, search, sum) but harder to migrate later — full tradeoff written at kickoff.
+- **Notes:** existing `note text` field rendered as a secondary line on the list row when set, hidden when empty. Edit sheet gets a multi-line note input, soft-capped at 280 chars.
+- **Migration:** existing data preserved. Items added before M8 with quantity baked into the name (e.g. `"milk x2"`) are not auto-parsed — users can re-edit if they want structured.
+
+**Done when:** A household member can edit an item to add `2 kg` or `1 dozen` plus a note, both appear on the list row, and items without quantity look exactly as they do today.
+
+---
+
+### M9 — Full Account Upgrade (Email)
+
+**~4–5 days**
+
+Real-world feedback surfaced data-loss anxiety as the single largest concern from V1 users. This milestone converts anonymous sessions to permanent accounts without losing any data.
+
+**Deliverables (as shipped):**
+
+- **Sign-up methods:** email/password via Supabase Auth (`updateUser({ email, password })`). Google Sign-In was descoped to V2 — the Google Cloud Console + consent-screen setup added meaningful friction with no V1-user demand. The architecture stays Google-ready: `/auth/callback` already exchanges OAuth codes, and `useUpgradeAccount` is structured so `linkIdentity` can be re-added as a sibling method.
+- **Upgrade flow:** anonymous user → "Save your account" CTA in Settings, plus an unobtrusive banner after 7 days of use (re-shows 14 days after dismissal). `supabase.auth.updateUser({ email, password })` preserves `auth.users.id`, so all `household_members.user_id` and `list_items.added_by` rows continue to resolve correctly — no data migration needed.
+- **Sign-in flow:** new "Sign in" screen for users on a different device. Email/password only in V1.1. On success: household memberships hydrate via `useSession` → `useHousehold` chain.
+- **Account recovery:** password reset email via `resetPasswordForEmail`. `/reset-password/new` lives outside the `(auth)` route group so the recovery session doesn't trip the "signed-in-with-household → /list" bounce before the user can set a new password.
+- **Settings additions:** "Account" section showing email + provider; "Sign out" button. Anonymous users see only "Save your account" (no sign-out, since it would orphan their household irreversibly).
+- **Behaviour change to anon-session creation:** `SessionProvider` no longer auto-mints an anon session on bootstrap. The "Get started" button on `/welcome` calls `signInAnonymously` explicitly. Without this, a real sign-out would silently mint a fresh ghost user on the next visit.
+- **Proxy:** `src/proxy.ts` already protects `(app)` routes by session existence — no change needed. New sign-in route handlers under `src/app/(auth)/sign-in/`.
+- **Edge case (descoped):** offline upgrade attempts are blocked with a friendly "Connect to the internet to save your account" message, not queued. Persisting the user's plaintext password in IndexedDB to replay later is a security regression we won't take.
+
+**Required Supabase dashboard config** (not in code): Site URL + Additional Redirect URLs must include `{origin}/auth/callback` for prod + `http://localhost:3000/auth/callback` for dev. Email templates use `{{ .ConfirmationURL }}` by default.
+
+**Done when:** A user with an anonymous session can convert to email/password, sign out, sign in on a different browser, and see their household and list intact.
+
+---
+
+### M10 — Multiple Lists per Household
+
+**~4–5 days**
+
+A subset of users wants a "staples" list separate from one-off shops, or per-store lists ("Costco Run" vs. "Weekly Groceries"). The `lists` table already supports this — every household just has exactly one row today. This milestone makes that count variable, and it lands before M11/M12 so recurring + history are built list-aware.
+
+**Deliverables:**
+
+- **List switcher** in the header — shows all lists for the household, indicates the active list.
+- **Create / rename / delete list.** Any household member can create or rename; only the list creator or household owner can delete. Delete requires confirmation and cascades to `list_items`.
+- **Per-list realtime:** `useList` gains a `listId` param; the realtime channel rescopes when active list changes (`supabase.removeChannel` + new `.channel('list:${listId}')`).
+- **Per-list presence:** "● Sarah is on Costco Run" — presence channel rekeyed by `list_id`.
+- **Default list per household.** New households get one list named "Shopping List" (preserves M2 behaviour). Active list per user persisted in `localStorage`.
+- **Migration:** existing single-list households continue working seamlessly — the switcher just shows their one list.
+- **Active list state:** lives in `householdStore` as `activeListId`; `listStore` reads from the active list only.
+
+**Done when:** A household can have two separate lists. Adding to one doesn't affect the other. Realtime and presence rescope correctly when switching.
+
+---
+
+### M11 — Recurring / Staple Items + Shopping Trip Model
+
+**~3–4 days**
+
+The most-requested theme across all feedback: "I retype milk and eggs every shopping trip". This milestone introduces a `shopping_trip` data model and a `is_recurring` flag that together change the meaning of "Clear checked" from "destroy everything" to "complete this trip" — which also addresses the "what happens when I clear?" confusion.
+
+**Deliverables:**
+
+- **Schema:** `list_items.is_recurring boolean not null default false`. New `shopping_trips` table: `id`, `list_id`, `household_id`, `finished_by user_id`, `finished_at`, `item_count`. New `shopping_trip_items` table snapshots cleared items per trip (`trip_id`, `name`, `quantity_value`, `quantity_unit`, `category`, `note`, `was_recurring`, `added_by_name`).
+- **"Mark as staple"** toggle on the edit sheet. Recurring items get a subtle indicator on the list row (small icon, no copy).
+- **"Finish shopping" RPC.** Existing "Clear checked" button renamed to "Finish shopping". The server-side RPC, in one transaction:
+  - Snapshots all currently-checked items into `shopping_trip_items`
+  - Deletes non-recurring checked items
+  - Unchecks recurring items (they stay on the list)
+  - Creates one `shopping_trips` row
+- **Confirmation preview** before Finish Shopping: "4 items will be removed, 3 staples will stay" — makes the behaviour explicit, addressing the V1 confusion.
+- **Onboarding hint:** first time a user marks an item as staple, a one-line toast explains the behaviour.
+
+**Done when:** Marking "milk" as recurring keeps it on the list (unchecked) after Finish Shopping. Non-recurring items disappear. A `shopping_trips` row records the trip.
+
+---
+
+### M12 — Shopping History
+
+**~3–4 days**
+
+The natural counterpart to M11. Once `shopping_trips` exist, users can revisit past trips and re-add items they forgot to mark as staples.
+
+**Deliverables:**
+
+- **History screen** at `/history`. Past trips for the household, grouped by month, showing date + finisher's display name + item count.
+- **Trip detail sheet:** tap a trip → see all items, including quantity, note, and category.
+- **Restore items:** "Add to current list" button on past-trip items. Bulk-select supported. Restored items are new rows with fresh `created_at` (not original timestamps).
+- **History scope:** household-wide (across all lists). Each trip displays which list it was from. Per-list filter deferred to V2.
+- **Cap:** show last 90 days by default; older trips reachable via "Load more". No deletion of trips in V1.1 — append-only.
+- **Former-member handling:** trip items show "Added by Sarah (former member)" using the same M3.5 snapshot pattern.
+
+**Done when:** A user can open History, see their last 5 trips, tap one, and restore "olive oil" to the current list.
+
+---
+
+### M13 — Sentry & Observability
+
+**~1–2 days**
+
+Deferred from M7 and reordered to the end of V1.1 at user request (reduces upfront tool-learning overhead). The smallest V1.1 milestone — wires what the M7 `ErrorFallback` was always designed to call.
+
+**Deliverables:**
+
+- `@sentry/nextjs` installed and configured.
+- Replace `ErrorFallback`'s `console.error('[error-boundary]', error)` placeholder with `Sentry.captureException(error)`.
+- Source-map upload via the Vercel + Sentry integration (no manual CI step).
+- Add `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` to `.env.example` and CLAUDE.md §6. Flip CLAUDE.md §4 Monitoring row from "(deferred to end of V1.1)" → active.
+- Test capture end-to-end: trigger a route boundary, confirm event lands in Sentry within seconds.
+- PII handling: `sendDefaultPii: false`; only a hashed user ID sent for correlation. No item names, no household names.
+
+**Done when:** A deliberate `throw` inside a route component lands a tagged event in the Sentry dashboard, with source-map-resolved stack frames.
+
+---
+
+### M14 — QA, Edge Cases & V1.1 Launch
+
+**~2–3 days**
+
+Mirrors M7 for V1.1 — real-device sweep, Lighthouse audit, cross-browser. Plus V1.1-specific edge cases that didn't exist in V1.
+
+**Deliverables:**
+
+- Full happy-path on real devices across the new flows: account upgrade → multi-list create → mark staples → finish shopping → review history → restore from history.
+- V1.1-specific edge cases:
+  - Account upgrade with offline pending writes — `updateUser` queued and replayed after reconnect
+  - Switching active list while offline — `activeListId` persists, realtime resubscribes on reconnect
+  - Recurring-only list → "Finish shopping" should be disabled (nothing to remove)
+  - History restore when the source list has been deleted — restore targets current active list
+  - Concurrent Finish Shopping by two members on the same list — server RPC serialises per `list_id`
+  - Google OAuth callback on a domain installed as a PWA (callback should return to the installed app, not a fresh browser tab)
+- Lighthouse audit: Performance ≥ 85, Accessibility ≥ 90, Best Practices ≥ 90, PWA ✓.
+- Cross-browser sweep: Chrome (Android), Safari (iOS), Chrome (desktop), Safari (desktop), Firefox (desktop).
+- Sentry confirmed receiving events for both error-boundary triggers and unhandled rejections.
+- V1.1 release note drafted and shared with the 10 active V1 households.
+
+**Done when:** All 10 V1 households have been notified of V1.1, account upgrade flow tested by ≥ 2 households end-to-end, no P0/P1 bugs open.
+
+---
+
+### M8–M14 Summary
+
+| Milestone | Focus                                 | Est. Days | Cumulative |
+| --------- | ------------------------------------- | --------- | ---------- |
+| M8        | Item Quantity & Notes                 | 2–3       | 3          |
+| M9        | Full Account Upgrade (Email)          | 4–5       | 8          |
+| M10       | Multiple Lists per Household          | 4–5       | 13         |
+| M11       | Recurring / Staple Items + Trip Model | 3–4       | 17         |
+| M12       | Shopping History                      | 3–4       | 21         |
+| M13       | Sentry & Observability                | 1–2       | 23         |
+| M14       | QA, Edge Cases & V1.1 Launch          | 2–3       | 26         |
+
+**Total: ~3–4 weeks** working evenings and weekends as a solo developer.
+
+> **Note on Sentry ordering.** Originally slotted as the first V1.1 milestone (to give observability to everything after it), Sentry was deferred to M13 at the user's request to reduce upfront tool-learning overhead. The tradeoff: M8–M12 ship without Sentry coverage. Acceptable because (a) the V1 userbase is ~10 households, (b) `ErrorFallback` already logs to console as a placeholder, and (c) M14 QA catches major issues before V1.1 reaches a broader audience.
+
+> **Note on dropped V1.1 candidates.** Activity feed and push notifications were in the original V1.1 list (plan.md §12) but had zero user demand from V1 households — both moved to V2. Push notifications additionally hit the iOS 16.4+ installed-PWA-only constraint, which makes more sense to absorb during native port.
+
+---
+
 ## 12. Incremental Upgrade Roadmap
 
 ```
@@ -632,17 +806,18 @@ V1 — PWA (Weeks 1–6)
   └── Core list, real-time sync, household invite, guest auth, offline
   └── Works in browser; installable via Safari (iOS) and Chrome (Android)
 
-V1.1 — PWA (Weeks 7–12)
-  └── Multiple lists per household
-  └── Item quantity and notes
-  └── Activity feed ("who added what, when")
+V1.1 — Continuity & Trust (Weeks 7–10)
+  └── Item quantity (g, kg, mL, L, piece, can, dozen) and notes
   └── Full auth — email + Google Sign-In, account recovery
-  └── Push notifications (Android PWA; iOS 16.4+ PWA only)
+  └── Multiple lists per household
+  └── Recurring / staple items (introduces shopping trip model)
+  └── Shopping history (view + restore items from past trips)
   └── Sentry — error tracking + source-map upload (deferred from M7)
 
 V2 — PWA + Begin Native Prep (Months 4–6)
-  └── Recurring items / smart suggestions
-  └── List history and archive
+  └── Push notifications (Android PWA + iOS 16.4+ PWA, full coverage in native)
+  └── Activity feed ("who added/checked what, when")
+  └── Smart suggestions (auto-detect recurring patterns from trip history)
   └── Begin React Native port (Expo) — same Supabase backend, shared logic
   └── Internal TestFlight / EAS build for early testers
 

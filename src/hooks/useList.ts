@@ -21,7 +21,16 @@ export interface UseListApi {
   isLoading: boolean
   addItem: (name: string) => Promise<void>
   toggleChecked: (id: string) => Promise<void>
-  updateItem: (id: string, patch: { name?: string; category?: string }) => Promise<void>
+  updateItem: (
+    id: string,
+    patch: {
+      name?: string
+      category?: string
+      quantity_value?: number | null
+      quantity_unit?: string | null
+      note?: string | null
+    },
+  ) => Promise<void>
   deleteItem: (id: string) => Promise<ListItem | null>
   undoDelete: (item: ListItem) => Promise<void>
   clearChecked: () => Promise<ListItem[]>
@@ -283,6 +292,8 @@ export function useList(): UseListApi {
         added_by_name: null,
         name,
         quantity: null,
+        quantity_value: null,
+        quantity_unit: null,
         category,
         is_checked: false,
         checked_by: null,
@@ -402,13 +413,28 @@ export function useList(): UseListApi {
   )
 
   const updateItem = useCallback(
-    async (id: string, patch: { name?: string; category?: string }) => {
+    async (
+      id: string,
+      patch: {
+        name?: string
+        category?: string
+        quantity_value?: number | null
+        quantity_unit?: string | null
+        note?: string | null
+      },
+    ) => {
       const current = itemsRef.current.find((i) => i.id === id)
       if (!current) return
 
       const next: Partial<ListItem> = {}
       if (patch.name !== undefined) next.name = patch.name.trim()
       if (patch.category !== undefined) next.category = patch.category
+      if (patch.quantity_value !== undefined) next.quantity_value = patch.quantity_value
+      if (patch.quantity_unit !== undefined) next.quantity_unit = patch.quantity_unit
+      if (patch.note !== undefined) {
+        const trimmed = patch.note?.trim() ?? null
+        next.note = trimmed && trimmed.length > 0 ? trimmed : null
+      }
       if (Object.keys(next).length === 0) return
 
       const supabase = createClient()
@@ -427,6 +453,9 @@ export function useList(): UseListApi {
           useListStore.getState().updateItemOptimistic(id, {
             name: current.name,
             category: current.category,
+            quantity_value: current.quantity_value,
+            quantity_unit: current.quantity_unit,
+            note: current.note,
           })
           throw error
         }
@@ -487,6 +516,8 @@ export function useList(): UseListApi {
       added_by: item.added_by ?? undefined,
       name: item.name,
       quantity: item.quantity,
+      quantity_value: item.quantity_value,
+      quantity_unit: item.quantity_unit,
       category: item.category,
       is_checked: item.is_checked,
       checked_by: item.checked_by,

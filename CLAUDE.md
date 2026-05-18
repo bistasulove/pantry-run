@@ -22,22 +22,30 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M7 shipped, V1 launched
+ACTIVE: none — M9 shipped; M10 (Multiple Lists) up next
 ```
 
-Update this line when starting a new milestone. Milestone definitions are in `docs/plan.md` Section 11.
+Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5.
 
-| #    | Milestone                        | Status  |
-| ---- | -------------------------------- | ------- |
-| M0   | Scaffold & Infrastructure        | ✅ Done |
-| M1   | Guest Auth & Session Persistence | ✅ Done |
-| M2   | Household Create & Join          | ✅ Done |
-| M3   | Shopping List Core (CRUD)        | ✅ Done |
-| M3.5 | Testing & Feedback               | ✅ Done |
-| M4   | Real-Time Sync                   | ✅ Done |
-| M5   | Offline Support                  | ✅ Done |
-| M6   | PWA Polish & Install             | ✅ Done |
-| M7   | QA, Edge Cases & Launch          | ✅ Done |
+| #                             | Milestone                             | Status     |
+| ----------------------------- | ------------------------------------- | ---------- |
+| M0                            | Scaffold & Infrastructure             | ✅ Done    |
+| M1                            | Guest Auth & Session Persistence      | ✅ Done    |
+| M2                            | Household Create & Join               | ✅ Done    |
+| M3                            | Shopping List Core (CRUD)             | ✅ Done    |
+| M3.5                          | Testing & Feedback                    | ✅ Done    |
+| M4                            | Real-Time Sync                        | ✅ Done    |
+| M5                            | Offline Support                       | ✅ Done    |
+| M6                            | PWA Polish & Install                  | ✅ Done    |
+| M7                            | QA, Edge Cases & Launch               | ✅ Done    |
+| **V1.1 — Continuity & Trust** |                                       |            |
+| M8                            | Item Quantity & Notes                 | ✅ Done    |
+| M9                            | Full Account Upgrade (Email)          | ✅ Done    |
+| M10                           | Multiple Lists per Household          | ⏳ Planned |
+| M11                           | Recurring / Staple Items + Trip Model | ⏳ Planned |
+| M12                           | Shopping History                      | ⏳ Planned |
+| M13                           | Sentry & Observability                | ⏳ Planned |
+| M14                           | QA, Edge Cases & V1.1 Launch          | ⏳ Planned |
 
 ---
 
@@ -77,7 +85,7 @@ npx supabase gen types typescript --local > src/lib/database.types.ts  # Regener
 | State      | Zustand v5                          | Client state only                                                               |
 | Database   | Supabase (PostgreSQL)               | Via `@supabase/supabase-js` v2                                                  |
 | Real-time  | Supabase Realtime                   | WebSocket subscriptions                                                         |
-| Auth       | Supabase Auth                       | Anonymous → email/Google upgrade                                                |
+| Auth       | Supabase Auth                       | Anonymous → email/password upgrade (Google deferred to V2)                      |
 | Offline    | hand-rolled SW + idb                | `public/sw.js` (no Workbox / next-pwa) + IndexedDB queue & cache                |
 | Icons      | Lucide React                        | `lucide-react` package                                                          |
 | Fonts      | Plus Jakarta Sans, DM Sans, DM Mono | Via `next/font/google`                                                          |

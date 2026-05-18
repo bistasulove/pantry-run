@@ -1,11 +1,48 @@
 'use client'
 
+import type { User } from '@supabase/supabase-js'
+import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 
 import { createClient } from '@/lib/supabase/client'
 import { useUserStore } from '@/store/userStore'
 
+// Extract a stable provider label from auth.users — Google sign-ins land as
+// `google`; email/password ends up as `email`. Anonymous sessions report
+// nothing meaningful, so we surface null and let consumers special-case.
+function readProvider(user: User): string | null {
+  const fromMetadata = user.app_metadata?.provider
+  if (typeof fromMetadata === 'string' && fromMetadata !== 'anonymous') return fromMetadata
+  return null
+}
+
+// Supabase exposes the pending email change under `new_email` on the user
+// object — it's set when updateUser({ email }) has been called but the user
+// hasn't clicked the confirmation link yet. Not in every published type
+// definition, so we read it defensively.
+function readPendingEmail(user: User): string | null {
+  const value = (user as User & { new_email?: string | null }).new_email
+  if (typeof value !== 'string' || value.length === 0) return null
+  return value
+}
+
+function hydrateFromUser(user: User) {
+  useUserStore.getState().setUser({
+    userId: user.id,
+    isAnonymous: user.is_anonymous ?? false,
+    email: user.email ?? null,
+    pendingEmail: readPendingEmail(user),
+    provider: readProvider(user),
+    createdAt: user.created_at ?? null,
+  })
+}
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+
+  // One-time bootstrap + subscribe to client-side auth events (sign-in,
+  // sign-out, token refresh, in-tab USER_UPDATED). These cover the flows
+  // that happen entirely on the client.
   useEffect(() => {
     const supabase = createClient()
     let cancelled = false
@@ -18,26 +55,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return
 
       if (session?.user) {
-        useUserStore.getState().setUser({
-          userId: session.user.id,
-          isAnonymous: session.user.is_anonymous ?? false,
-        })
-        return
+        hydrateFromUser(session.user)
       }
-
-      const { data, error } = await supabase.auth.signInAnonymously()
-
-      if (cancelled) return
-
-      if (error || !data.user) {
-        console.error('[SessionProvider] anonymous sign-in failed', error)
-        return
-      }
-
-      useUserStore.getState().setUser({
-        userId: data.user.id,
-        isAnonymous: data.user.is_anonymous ?? true,
-      })
+      // No session = no auto-anon (M9 D6). Welcome screen creates the anon
+      // session at user-action time so sign-out doesn't immediately mint a
+      // fresh ghost user.
     }
 
     bootstrap()
@@ -46,10 +68,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        useUserStore.getState().setUser({
-          userId: session.user.id,
-          isAnonymous: session.user.is_anonymous ?? false,
-        })
+        hydrateFromUser(session.user)
       } else {
         useUserStore.getState().clearUser()
       }
@@ -60,6 +79,38 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe()
     }
   }, [])
+
+  // Refresh user data on every route change to catch out-of-band session
+  // updates — specifically /auth/callback's exchangeCodeForSession, which
+  // flips is_anonymous and clears new_email on the server but emits no
+  // client-side auth event (the listener only fires for client-initiated
+  // changes). Without this, userStore stays stale after a confirmed email
+  // upgrade until the user does a full reload.
+  //
+  // Two-step (getSession then getUser) so signed-out routes don't trigger a
+  // network call and log "Auth session missing!" noise. getUser() (vs
+  // getSession() alone) hits Supabase's /user endpoint so the returned
+  // object always reflects the latest server state — getSession() would
+  // return the in-memory cached session which can be stale.
+  useEffect(() => {
+    const supabase = createClient()
+    let cancelled = false
+
+    async function refresh() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (cancelled || !session) return
+      const { data, error } = await supabase.auth.getUser()
+      if (cancelled || error || !data.user) return
+      hydrateFromUser(data.user)
+    }
+
+    refresh()
+    return () => {
+      cancelled = true
+    }
+  }, [pathname])
 
   return <>{children}</>
 }

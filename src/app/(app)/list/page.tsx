@@ -79,7 +79,16 @@ export default function ListPage() {
     }
   }
 
-  async function handleEditSave(id: string, patch: { name?: string; category?: string }) {
+  async function handleEditSave(
+    id: string,
+    patch: {
+      name?: string
+      category?: string
+      quantity_value?: number | null
+      quantity_unit?: string | null
+      note?: string | null
+    },
+  ) {
     try {
       await updateItem(id, patch)
     } catch {

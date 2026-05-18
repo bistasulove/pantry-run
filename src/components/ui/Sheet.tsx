@@ -13,6 +13,16 @@ interface SheetProps {
 export function Sheet({ open, onClose, title, children }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
+
+  // Keep the latest onClose accessible from the Escape handler without putting
+  // it in the open-effect's dep array. Parents typically pass inline lambdas
+  // for onClose, so its identity churns on every render — including the ones
+  // triggered by typing in a child input. If the open effect re-ran each
+  // keystroke it would yank focus back to the panel via panelRef.current.focus().
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
 
   useEffect(() => {
     if (!open) return
@@ -32,7 +42,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (e.key !== 'Tab') return
@@ -66,7 +76,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
       document.body.style.overflow = previousOverflow
       previouslyFocused.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open || typeof document === 'undefined') return null
 

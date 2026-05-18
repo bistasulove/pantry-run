@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Mono, DM_Sans, Plus_Jakarta_Sans } from 'next/font/google'
 
+import { AuthErrorHashHandler } from '@/components/providers/AuthErrorHashHandler'
 import { ServiceWorkerRegistrar } from '@/components/providers/ServiceWorkerRegistrar'
 import { SessionProvider } from '@/components/providers/SessionProvider'
 
@@ -61,6 +62,14 @@ export const viewport: Viewport = {
 // Kept minified inline because anything async would defeat the purpose.
 const THEME_PRE_HYDRATION_SCRIPT = `(function(){try{var t=localStorage.getItem('pantry-run:theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`
 
+// Captures Supabase auth error hash fragments synchronously, before React
+// hydrates and before any cached app bundle runs (a service-worker-served
+// page can be slow to wire up its handlers). The hash is moved into
+// sessionStorage and stripped from the URL so a refresh doesn't re-fire
+// and the error doesn't leak via copy/paste; AuthErrorHashHandler reads
+// from sessionStorage when it mounts.
+const AUTH_ERROR_HASH_CAPTURE_SCRIPT = `(function(){try{var h=window.location.hash;if(h&&h.indexOf('error=')!==-1){sessionStorage.setItem('pantry-run:auth-error-hash',h);window.history.replaceState(null,'',window.location.pathname+window.location.search);}}catch(e){}})();`
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -70,10 +79,12 @@ export default function RootLayout({
     <html lang="en" className={`${plusJakarta.variable} ${dmSans.variable} ${dmMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_PRE_HYDRATION_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: AUTH_ERROR_HASH_CAPTURE_SCRIPT }} />
       </head>
       <body>
         <ServiceWorkerRegistrar />
         <SessionProvider>{children}</SessionProvider>
+        <AuthErrorHashHandler />
       </body>
     </html>
   )

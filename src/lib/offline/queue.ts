@@ -15,7 +15,15 @@ export type QueuedOp =
       patch: Partial<
         Pick<
           ListItemRow,
-          'name' | 'category' | 'is_checked' | 'checked_by' | 'checked_at' | 'quantity' | 'note'
+          | 'name'
+          | 'category'
+          | 'is_checked'
+          | 'checked_by'
+          | 'checked_at'
+          | 'quantity'
+          | 'quantity_value'
+          | 'quantity_unit'
+          | 'note'
         >
       >
     }

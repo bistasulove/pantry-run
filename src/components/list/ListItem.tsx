@@ -3,7 +3,18 @@
 import { Check, Trash2 } from 'lucide-react'
 import { useRef, useState, type PointerEvent } from 'react'
 
+import { formatQuantity, isUnitKey } from '@/lib/units'
 import { useListStore, type ListItem as ListItemType } from '@/store/listStore'
+
+function deriveQuantityDisplay(item: ListItemType): string | null {
+  if (item.quantity_value != null && isUnitKey(item.quantity_unit)) {
+    return formatQuantity(item.quantity_value, item.quantity_unit)
+  }
+  // Legacy fallback — pre-M8 items stored quantity as free text on `quantity`.
+  // Render as-is so old data keeps showing the value the user typed.
+  const legacy = item.quantity?.trim()
+  return legacy ? legacy : null
+}
 
 interface ListItemProps {
   item: ListItemType
@@ -22,6 +33,8 @@ export function ListItem({ item, onToggle, onEdit, onDelete }: ListItemProps) {
   const pointerId = useRef<number | null>(null)
   const moved = useRef(false)
   const isFresh = useListStore((s) => s.freshlySyncedIds.has(item.id))
+  const quantityDisplay = deriveQuantityDisplay(item)
+  const ariaLabelName = quantityDisplay ? `${item.name}, ${quantityDisplay}` : item.name
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -92,7 +105,7 @@ export function ListItem({ item, onToggle, onEdit, onDelete }: ListItemProps) {
           type="button"
           role="checkbox"
           aria-checked={item.is_checked}
-          aria-label={`${item.is_checked ? 'Uncheck' : 'Check'} ${item.name}`}
+          aria-label={`${item.is_checked ? 'Uncheck' : 'Check'} ${ariaLabelName}`}
           onClick={(e) => {
             e.stopPropagation()
             onToggle(item.id)
@@ -113,15 +126,25 @@ export function ListItem({ item, onToggle, onEdit, onDelete }: ListItemProps) {
         <button
           type="button"
           onClick={handleBodyClick}
-          aria-label={`Edit ${item.name}`}
+          aria-label={`Edit ${ariaLabelName}`}
           className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 py-2 pr-4 text-left"
         >
-          <span
-            className={`text-text-primary ease-out-expo min-w-0 flex-1 text-[16px] leading-relaxed break-words transition-opacity duration-[250ms] ${
-              item.is_checked ? 'text-text-secondary line-through opacity-70' : ''
-            }`}
-          >
-            {item.name}
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span
+              className={`text-text-primary ease-out-expo text-[16px] leading-relaxed break-words transition-opacity duration-[250ms] ${
+                item.is_checked ? 'text-text-secondary line-through opacity-70' : ''
+              }`}
+            >
+              {item.name}
+              {quantityDisplay ? (
+                <span className="text-text-secondary"> · {quantityDisplay}</span>
+              ) : null}
+            </span>
+            {item.note ? (
+              <span className="text-text-secondary line-clamp-1 text-[14px] leading-relaxed">
+                {item.note}
+              </span>
+            ) : null}
           </span>
         </button>
       </div>

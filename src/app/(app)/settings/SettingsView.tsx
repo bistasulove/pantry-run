@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 
+import { AccountSection } from '@/components/settings/AccountSection'
 import { LeaveHouseholdSection } from '@/components/settings/LeaveHouseholdSection'
 import { ThemeToggle } from '@/components/settings/ThemeToggle'
 import { Button } from '@/components/ui/Button'
@@ -67,6 +68,8 @@ export function SettingsView({ memberRowId, initialDisplayName }: SettingsViewPr
       </Button>
 
       <ThemeToggle />
+
+      <AccountSection />
 
       <LeaveHouseholdSection />
 

@@ -1,3 +1,4 @@
+import { SaveAccountBanner } from '@/components/auth/SaveAccountBanner'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { Header } from '@/components/layout/Header'
 import { InstallBanner } from '@/components/layout/InstallBanner'
@@ -21,6 +22,7 @@ export function AppShell({ children }: AppShellProps) {
       <Header />
       <MissingNameBanner />
       <OfflineBanner />
+      <SaveAccountBanner />
       <InstallBanner />
       <HouseholdMembersRealtime />
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
