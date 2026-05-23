@@ -103,6 +103,7 @@ export type Database = {
           created_at: string
           id: string
           is_checked: boolean
+          is_recurring: boolean
           list_id: string
           name: string
           note: string | null
@@ -121,6 +122,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_checked?: boolean
+          is_recurring?: boolean
           list_id: string
           name: string
           note?: string | null
@@ -139,6 +141,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_checked?: boolean
+          is_recurring?: boolean
           list_id?: string
           name?: string
           note?: string | null
@@ -190,6 +193,98 @@ export type Database = {
           },
         ]
       }
+      shopping_trip_items: {
+        Row: {
+          added_by_name: string | null
+          category: string
+          created_at: string
+          id: string
+          name: string
+          note: string | null
+          quantity: string | null
+          quantity_unit: string | null
+          quantity_value: number | null
+          trip_id: string
+          was_recurring: boolean
+        }
+        Insert: {
+          added_by_name?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          name: string
+          note?: string | null
+          quantity?: string | null
+          quantity_unit?: string | null
+          quantity_value?: number | null
+          trip_id: string
+          was_recurring?: boolean
+        }
+        Update: {
+          added_by_name?: string | null
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
+          note?: string | null
+          quantity?: string | null
+          quantity_unit?: string | null
+          quantity_value?: number | null
+          trip_id?: string
+          was_recurring?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_trip_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "shopping_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopping_trips: {
+        Row: {
+          finished_at: string
+          finished_by: string | null
+          household_id: string
+          id: string
+          item_count: number
+          list_id: string | null
+        }
+        Insert: {
+          finished_at?: string
+          finished_by?: string | null
+          household_id: string
+          id?: string
+          item_count?: number
+          list_id?: string | null
+        }
+        Update: {
+          finished_at?: string
+          finished_by?: string | null
+          household_id?: string
+          id?: string
+          item_count?: number
+          list_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_trips_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_trips_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -199,6 +294,7 @@ export type Database = {
         Args: { p_display_name?: string; p_name: string }
         Returns: Json
       }
+      finish_shopping: { Args: { p_list_id: string }; Returns: Json }
       gen_invite_code: { Args: never; Returns: string }
       is_household_member: {
         Args: { p_household_id: string }

@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M10 shipped; M11 (Recurring / Staple Items) up next
+ACTIVE: none — M11 shipped; M12 (Shopping History) up next
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5.
@@ -42,7 +42,7 @@ Update this line when starting a new milestone. V1 milestone definitions are in 
 | M8                            | Item Quantity & Notes                 | ✅ Done    |
 | M9                            | Full Account Upgrade (Email)          | ✅ Done    |
 | M10                           | Multiple Lists per Household          | ✅ Done    |
-| M11                           | Recurring / Staple Items + Trip Model | ⏳ Planned |
+| M11                           | Recurring / Staple Items + Trip Model | ✅ Done    |
 | M12                           | Shopping History                      | ⏳ Planned |
 | M13                           | Sentry & Observability                | ⏳ Planned |
 | M14                           | QA, Edge Cases & V1.1 Launch          | ⏳ Planned |
@@ -206,7 +206,7 @@ Never commit `.env.local`. Never hardcode these values in any file.
 
 ## 7. Database Schema
 
-Four tables, all with Row Level Security (RLS) enabled.
+Six tables, all with Row Level Security (RLS) enabled.
 
 ```sql
 households
@@ -229,28 +229,55 @@ lists
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid()
   household_id  uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE
   name          text NOT NULL DEFAULT 'Shopping List'
+  created_by    uuid REFERENCES auth.users(id) ON DELETE SET NULL DEFAULT auth.uid()  -- M10
   created_at    timestamptz DEFAULT now()
 
 list_items
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  list_id         uuid NOT NULL REFERENCES lists(id) ON DELETE CASCADE
+  added_by        uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  added_by_name   text                                        -- M3.5 snapshot for former members
+  name            text NOT NULL
+  quantity        text                                        -- legacy free-text, pre-M8 fallback
+  quantity_value  numeric(6,2)                                -- M8 canonical
+  quantity_unit   text                                        -- M8 canonical: g|kg|mL|L|piece|can|dozen
+  category        text NOT NULL DEFAULT 'Other'
+  is_checked      boolean NOT NULL DEFAULT false
+  is_recurring    boolean NOT NULL DEFAULT false              -- M11 staple flag
+  checked_by      uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  checked_at      timestamptz
+  note            text
+  sort_order      integer NOT NULL DEFAULT 0
+  created_at      timestamptz DEFAULT now()
+  updated_at      timestamptz DEFAULT now()
+
+shopping_trips                                                -- M11 append-only trip log
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid()
-  list_id       uuid NOT NULL REFERENCES lists(id) ON DELETE CASCADE
-  added_by      uuid REFERENCES auth.users(id) ON DELETE SET NULL
-  name          text NOT NULL
-  quantity      text
-  category      text NOT NULL DEFAULT 'Other'
-  is_checked    boolean NOT NULL DEFAULT false
-  checked_by    uuid REFERENCES auth.users(id) ON DELETE SET NULL
-  checked_at    timestamptz
-  note          text
-  sort_order    integer NOT NULL DEFAULT 0
-  created_at    timestamptz DEFAULT now()
-  updated_at    timestamptz DEFAULT now()
+  household_id  uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE
+  list_id       uuid REFERENCES lists(id) ON DELETE SET NULL  -- informational; trips outlive their list
+  finished_by   uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  finished_at   timestamptz NOT NULL DEFAULT now()
+  item_count    integer NOT NULL DEFAULT 0
+
+shopping_trip_items                                           -- M11 full snapshot (no FK to list_items)
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  trip_id         uuid NOT NULL REFERENCES shopping_trips(id) ON DELETE CASCADE
+  name            text NOT NULL
+  quantity        text
+  quantity_value  numeric(6,2)
+  quantity_unit   text
+  category        text NOT NULL DEFAULT 'Other'
+  note            text
+  was_recurring   boolean NOT NULL DEFAULT false
+  added_by_name   text
+  created_at      timestamptz DEFAULT now()
 ```
 
 **RLS rules (enforce in every migration):**
 
 - Users can only SELECT/INSERT/UPDATE/DELETE `list_items` in lists belonging to their household
 - Users can only SELECT/INSERT `household_members` for their own household
+- `shopping_trips` and `shopping_trip_items` are SELECT-only for household members; writes happen via the `finish_shopping(p_list_id)` SECURITY DEFINER RPC
 - Invite codes are publicly readable for validation; all other household data requires membership
 
 **Never** query Supabase without a user session attached. Always use the client from `src/lib/supabase/client.ts` on the browser and `src/lib/supabase/server.ts` in server components.
@@ -589,7 +616,7 @@ The CI pipeline (GitHub Actions) runs these on every PR and blocks merge on fail
 Do not build, plan, or scaffold these until they appear in an active milestone:
 
 - Push notifications
-- Recurring / suggested items
+- Smart / suggested items
 - Email or Google Sign-In (auth upgrade is V1.1)
 - Quantity or notes on items (V1.1)
 - Meal planner

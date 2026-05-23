@@ -16,6 +16,10 @@ import { useUserStore } from '@/store/userStore'
 type ListItemInsert = Database['public']['Tables']['list_items']['Insert']
 type ListItemUpdate = Database['public']['Tables']['list_items']['Update']
 
+export type FinishShoppingResult =
+  | { ok: true; removed: number; kept: number; tripId: string | null }
+  | { ok: false; error: string }
+
 export interface UseListApi {
   items: ListItem[]
   isLoading: boolean
@@ -29,11 +33,12 @@ export interface UseListApi {
       quantity_value?: number | null
       quantity_unit?: string | null
       note?: string | null
+      is_recurring?: boolean
     },
   ) => Promise<void>
   deleteItem: (id: string) => Promise<ListItem | null>
   undoDelete: (item: ListItem) => Promise<void>
-  clearChecked: () => Promise<ListItem[]>
+  finishShopping: () => Promise<FinishShoppingResult>
 }
 
 // A TypeError from fetch (DNS, offline, socket reset) is the universal sign
@@ -296,6 +301,7 @@ export function useList(): UseListApi {
         quantity_unit: null,
         category,
         is_checked: false,
+        is_recurring: false,
         checked_by: null,
         checked_at: null,
         note: null,
@@ -421,6 +427,7 @@ export function useList(): UseListApi {
         quantity_value?: number | null
         quantity_unit?: string | null
         note?: string | null
+        is_recurring?: boolean
       },
     ) => {
       const current = itemsRef.current.find((i) => i.id === id)
@@ -431,6 +438,7 @@ export function useList(): UseListApi {
       if (patch.category !== undefined) next.category = patch.category
       if (patch.quantity_value !== undefined) next.quantity_value = patch.quantity_value
       if (patch.quantity_unit !== undefined) next.quantity_unit = patch.quantity_unit
+      if (patch.is_recurring !== undefined) next.is_recurring = patch.is_recurring
       if (patch.note !== undefined) {
         const trimmed = patch.note?.trim() ?? null
         next.note = trimmed && trimmed.length > 0 ? trimmed : null
@@ -455,6 +463,7 @@ export function useList(): UseListApi {
             category: current.category,
             quantity_value: current.quantity_value,
             quantity_unit: current.quantity_unit,
+            is_recurring: current.is_recurring,
             note: current.note,
           })
           throw error
@@ -550,46 +559,101 @@ export function useList(): UseListApi {
     }
   }, [])
 
-  const clearChecked = useCallback(async (): Promise<ListItem[]> => {
-    if (!listId) return []
-    const checked = itemsRef.current.filter((i) => i.is_checked)
-    if (checked.length === 0) return []
+  // M11: finish_shopping replaces the M3 clearChecked path.
+  //
+  // Online-only by design — the RPC mutates three tables atomically and
+  // realtime pushes the resulting deletes/updates back. Queueing it for hours
+  // is fragile (the snapshot would freeze the user's local view of the trip
+  // even if other members keep editing online).
+  const finishShopping = useCallback(async (): Promise<FinishShoppingResult> => {
+    if (!listId) return { ok: false, error: 'No active list.' }
 
-    const supabase = createClient()
-    for (const item of checked) {
-      useListStore.getState().removeItemOptimistic(item.id)
+    const checked = itemsRef.current.filter((i) => i.is_checked)
+    if (checked.length === 0) {
+      return { ok: true, removed: 0, kept: 0, tripId: null }
     }
 
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return { ok: false, error: 'Connect to the internet to finish your trip.' }
+    }
+
+    const removed = checked.filter((i) => !i.is_recurring)
+    const kept = checked.filter((i) => i.is_recurring)
+
+    // Optimistic: drop non-recurring rows, uncheck recurring rows. Realtime
+    // will confirm both via DELETE / UPDATE events.
+    for (const item of removed) {
+      useListStore.getState().removeItemOptimistic(item.id)
+    }
+    for (const item of kept) {
+      useListStore.getState().updateItemOptimistic(item.id, {
+        is_checked: false,
+        checked_by: null,
+        checked_at: null,
+      })
+    }
+
+    const supabase = createClient()
     useSyncStore.getState().beginWrite()
     let succeeded = false
     try {
-      const { error } = await supabase
-        .from('list_items')
-        .delete()
-        .eq('list_id', listId)
-        .eq('is_checked', true)
+      const { data, error } = await supabase.rpc('finish_shopping', { p_list_id: listId })
       if (error) {
         if (isNetworkError(error)) {
-          await pushToQueue({ kind: 'clearChecked', listId })
-          return checked
+          // Roll back the optimistic mutations — no queue path for this RPC.
+          for (const item of removed) useListStore.getState().addItemOptimistic(item)
+          for (const item of kept) {
+            useListStore.getState().updateItemOptimistic(item.id, {
+              is_checked: item.is_checked,
+              checked_by: item.checked_by,
+              checked_at: item.checked_at,
+            })
+          }
+          return { ok: false, error: 'Connect to the internet to finish your trip.' }
         }
-        console.error('[useList] clear-checked failed', error)
-        for (const item of checked) {
-          useListStore.getState().addItemOptimistic(item)
+        console.error('[useList] finish-shopping failed', error)
+        for (const item of removed) useListStore.getState().addItemOptimistic(item)
+        for (const item of kept) {
+          useListStore.getState().updateItemOptimistic(item.id, {
+            is_checked: item.is_checked,
+            checked_by: item.checked_by,
+            checked_at: item.checked_at,
+          })
         }
-        throw error
+        return { ok: false, error: "Couldn't finish your trip. Try again." }
       }
       succeeded = true
-    } catch (error) {
-      if (isNetworkError(error)) {
-        await pushToQueue({ kind: 'clearChecked', listId })
-        return checked
+      const payload = (data ?? {}) as {
+        status?: string
+        trip_id?: string
+        removed?: number
+        kept?: number
       }
-      throw error
+      if (payload.status === 'finished') {
+        return {
+          ok: true,
+          removed: payload.removed ?? removed.length,
+          kept: payload.kept ?? kept.length,
+          tripId: payload.trip_id ?? null,
+        }
+      }
+      if (payload.status === 'nothing_to_finish') {
+        return { ok: true, removed: 0, kept: 0, tripId: null }
+      }
+      // Anything else (forbidden / list_not_found / unauthenticated) — roll
+      // back and report. Should be unreachable in normal use given RLS.
+      for (const item of removed) useListStore.getState().addItemOptimistic(item)
+      for (const item of kept) {
+        useListStore.getState().updateItemOptimistic(item.id, {
+          is_checked: item.is_checked,
+          checked_by: item.checked_by,
+          checked_at: item.checked_at,
+        })
+      }
+      return { ok: false, error: "Couldn't finish your trip. Try again." }
     } finally {
       useSyncStore.getState().endWrite(succeeded)
     }
-    return checked
   }, [listId])
 
   return {
@@ -600,6 +664,6 @@ export function useList(): UseListApi {
     updateItem,
     deleteItem,
     undoDelete,
-    clearChecked,
+    finishShopping,
   }
 }

@@ -16,6 +16,8 @@ import { CATEGORY_ORDER } from '@/lib/categories'
 import type { ListItem } from '@/store/listStore'
 import { useListStore } from '@/store/listStore'
 
+const STAPLE_HINT_KEY = 'pr_seen_staple_hint'
+
 export default function ListPage() {
   const {
     items,
@@ -25,12 +27,13 @@ export default function ListPage() {
     updateItem,
     deleteItem,
     undoDelete,
-    clearChecked,
+    finishShopping,
   } = useList()
 
   const [editing, setEditing] = useState<ListItem | null>(null)
   const [toast, setToast] = useState<ToastOptions | null>(null)
   const [doneOpen, setDoneOpen] = useState(false)
+  const [finishing, setFinishing] = useState(false)
 
   const { activeByCategory, checkedItems } = useMemo(() => {
     const checked: ListItem[] = []
@@ -87,6 +90,7 @@ export default function ListPage() {
       quantity_value?: number | null
       quantity_unit?: string | null
       note?: string | null
+      is_recurring?: boolean
     },
   ) {
     try {
@@ -94,6 +98,18 @@ export default function ListPage() {
     } catch {
       setToast({ message: "Couldn't save that item." })
     }
+  }
+
+  function handleStapleHint() {
+    if (typeof window === 'undefined') return
+    try {
+      if (window.localStorage.getItem(STAPLE_HINT_KEY)) return
+      window.localStorage.setItem(STAPLE_HINT_KEY, '1')
+    } catch {
+      // localStorage can throw in private-mode Safari; surfacing the hint
+      // every time in that case is acceptable.
+    }
+    setToast({ message: 'Staples stay on the list when you finish shopping.' })
   }
 
   async function handleDelete(id: string) {
@@ -117,15 +133,45 @@ export default function ListPage() {
     }
   }
 
-  async function handleClearChecked() {
-    setDoneOpen(false)
+  const checkedToRemove = checkedItems.filter((i) => !i.is_recurring).length
+  const checkedToKeep = checkedItems.filter((i) => i.is_recurring).length
+
+  function previewCopy(): string {
+    if (checkedItems.length === 0) return 'Nothing to finish yet.'
+    if (checkedToRemove > 0 && checkedToKeep > 0) {
+      return `${checkedToRemove} item${checkedToRemove === 1 ? '' : 's'} will be removed · ${checkedToKeep} staple${checkedToKeep === 1 ? '' : 's'} will stay.`
+    }
+    if (checkedToRemove > 0) {
+      return `${checkedToRemove} item${checkedToRemove === 1 ? '' : 's'} will be removed.`
+    }
+    return `${checkedToKeep} staple${checkedToKeep === 1 ? '' : 's'} will stay on the list.`
+  }
+
+  function finishedCopy(removed: number, kept: number): string {
+    if (removed === 0 && kept === 0) return 'Nothing to finish yet.'
+    if (removed > 0 && kept > 0) {
+      return `Trip saved · ${removed} removed · ${kept} stay${kept === 1 ? 's' : ''}.`
+    }
+    if (removed > 0) {
+      return `Trip saved · ${removed} item${removed === 1 ? '' : 's'} removed.`
+    }
+    return `Trip saved · ${kept} staple${kept === 1 ? '' : 's'} stay${kept === 1 ? 's' : ''}.`
+  }
+
+  async function handleFinishShopping() {
+    if (finishing) return
+    setFinishing(true)
     try {
-      const cleared = await clearChecked()
-      if (cleared.length > 0) {
-        setToast({ message: `Cleared ${cleared.length} item${cleared.length === 1 ? '' : 's'}` })
+      const result = await finishShopping()
+      setDoneOpen(false)
+      if (!result.ok) {
+        setToast({ message: result.error })
+        return
       }
-    } catch {
-      setToast({ message: "Couldn't clear checked items." })
+      if (result.removed === 0 && result.kept === 0) return
+      setToast({ message: finishedCopy(result.removed, result.kept) })
+    } finally {
+      setFinishing(false)
     }
   }
 
@@ -161,7 +207,7 @@ export default function ListPage() {
               onToggle={handleToggle}
               onEdit={(item) => setEditing(item)}
               onDelete={handleDelete}
-              onClearChecked={() => setDoneOpen(true)}
+              onFinishShopping={() => setDoneOpen(true)}
             />
           </>
         )}
@@ -175,25 +221,22 @@ export default function ListPage() {
           onClose={() => setEditing(null)}
           onSave={handleEditSave}
           onDelete={handleDelete}
+          onStapleHint={handleStapleHint}
         />
       ) : null}
 
-      <Sheet open={doneOpen} onClose={() => setDoneOpen(false)} title="Done shopping?">
-        <p className="text-text-secondary mb-4 text-[16px] leading-relaxed">
-          {checkedItems.length > 0
-            ? `${checkedItems.length} checked item${checkedItems.length === 1 ? '' : 's'} will be removed.`
-            : 'Nothing to clear yet.'}
-        </p>
+      <Sheet open={doneOpen} onClose={() => setDoneOpen(false)} title="Finish shopping?">
+        <p className="text-text-secondary mb-4 text-[16px] leading-relaxed">{previewCopy()}</p>
         <div className="flex flex-col gap-2">
           <Button
-            onClick={handleClearChecked}
+            onClick={handleFinishShopping}
             variant="primary"
             fullWidth
-            disabled={checkedItems.length === 0}
+            disabled={checkedItems.length === 0 || finishing}
           >
-            Clear checked items
+            {finishing ? 'Finishing…' : 'Finish shopping'}
           </Button>
-          <Button onClick={() => setDoneOpen(false)} variant="ghost" fullWidth>
+          <Button onClick={() => setDoneOpen(false)} variant="ghost" fullWidth disabled={finishing}>
             Not yet
           </Button>
         </div>

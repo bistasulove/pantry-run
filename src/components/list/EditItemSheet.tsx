@@ -1,5 +1,6 @@
 'use client'
 
+import { Repeat } from 'lucide-react'
 import { useId, useState } from 'react'
 
 import { Button } from '@/components/ui/Button'
@@ -26,9 +27,14 @@ interface EditItemSheetProps {
       quantity_value?: number | null
       quantity_unit?: string | null
       note?: string | null
+      is_recurring?: boolean
     },
   ) => void | Promise<void>
   onDelete: (id: string) => void
+  // Fired the moment the user toggles "Mark as staple" on (before save). Parent
+  // decides whether this is the user's first-ever staple via a localStorage
+  // flag and surfaces the one-shot onboarding toast.
+  onStapleHint?: () => void
 }
 
 function describeAdder(
@@ -50,7 +56,13 @@ function describeAdder(
 
 // Mounted only while an item is being edited (parent renders conditionally),
 // so initial state can derive from the item prop without a sync effect.
-export function EditItemSheet({ item, onClose, onSave, onDelete }: EditItemSheetProps) {
+export function EditItemSheet({
+  item,
+  onClose,
+  onSave,
+  onDelete,
+  onStapleHint,
+}: EditItemSheetProps) {
   const [name, setName] = useState(item.name)
   const [category, setCategory] = useState<string>(item.category)
   const [quantityValue, setQuantityValue] = useState<number | null>(item.quantity_value ?? null)
@@ -58,8 +70,11 @@ export function EditItemSheet({ item, onClose, onSave, onDelete }: EditItemSheet
     isUnitKey(item.quantity_unit) ? item.quantity_unit : null,
   )
   const [note, setNote] = useState(item.note ?? '')
+  const [isRecurring, setIsRecurring] = useState<boolean>(item.is_recurring)
   const [submitting, setSubmitting] = useState(false)
   const noteCounterId = useId()
+  const stapleLabelId = useId()
+  const stapleDescId = useId()
 
   const { userId } = useSession()
   const { members } = useHousehold()
@@ -92,11 +107,13 @@ export function EditItemSheet({ item, onClose, onSave, onDelete }: EditItemSheet
       quantity_value?: number | null
       quantity_unit?: string | null
       note?: string | null
+      is_recurring?: boolean
     } = {}
     if (trimmedName !== item.name) patch.name = trimmedName
     if (category !== item.category) patch.category = category
     if (quantityValue !== item.quantity_value) patch.quantity_value = quantityValue
     if (effectiveUnit !== item.quantity_unit) patch.quantity_unit = effectiveUnit
+    if (isRecurring !== item.is_recurring) patch.is_recurring = isRecurring
     const nextNote = trimmedNoteLen > 0 ? note.trim() : null
     if (nextNote !== item.note) patch.note = nextNote
 
@@ -189,6 +206,55 @@ export function EditItemSheet({ item, onClose, onSave, onDelete }: EditItemSheet
               {note.length} / {NOTE_MAX_LEN}
             </span>
           ) : null}
+        </div>
+
+        <div className="border-border-default flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <Repeat
+              size={18}
+              strokeWidth={1.5}
+              className="text-text-secondary mt-0.5 shrink-0"
+              aria-hidden
+            />
+            <div className="flex flex-col">
+              <span
+                id={stapleLabelId}
+                className="text-text-primary text-[16px] leading-relaxed font-medium"
+              >
+                Mark as staple
+              </span>
+              <span id={stapleDescId} className="text-text-secondary text-[13px] leading-snug">
+                Stays on the list when you finish shopping.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isRecurring}
+            aria-labelledby={stapleLabelId}
+            aria-describedby={stapleDescId}
+            onClick={() => {
+              const next = !isRecurring
+              setIsRecurring(next)
+              if (next && !item.is_recurring && onStapleHint) onStapleHint()
+            }}
+            className="focus-visible:outline-accent flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <span className="sr-only">{isRecurring ? 'Unmark staple' : 'Mark as staple'}</span>
+            <span
+              aria-hidden
+              className={`relative inline-block h-[28px] w-[48px] rounded-full transition-colors duration-150 ${
+                isRecurring ? 'bg-accent' : 'bg-border-default'
+              }`}
+            >
+              <span
+                className={`absolute top-1/2 left-[3px] block size-[22px] -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out ${
+                  isRecurring ? 'translate-x-[20px]' : 'translate-x-0'
+                }`}
+              />
+            </span>
+          </button>
         </div>
 
         <div className="mt-2 flex flex-col gap-2">

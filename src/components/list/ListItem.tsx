@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Trash2 } from 'lucide-react'
+import { Check, Repeat, Trash2 } from 'lucide-react'
 import { useRef, useState, type PointerEvent } from 'react'
 
 import { formatQuantity, isUnitKey } from '@/lib/units'
@@ -34,7 +34,8 @@ export function ListItem({ item, onToggle, onEdit, onDelete }: ListItemProps) {
   const moved = useRef(false)
   const isFresh = useListStore((s) => s.freshlySyncedIds.has(item.id))
   const quantityDisplay = deriveQuantityDisplay(item)
-  const ariaLabelName = quantityDisplay ? `${item.name}, ${quantityDisplay}` : item.name
+  const baseLabel = quantityDisplay ? `${item.name}, ${quantityDisplay}` : item.name
+  const ariaLabelName = item.is_recurring ? `${baseLabel}, staple` : baseLabel
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -135,6 +136,14 @@ export function ListItem({ item, onToggle, onEdit, onDelete }: ListItemProps) {
                 item.is_checked ? 'text-text-secondary line-through opacity-70' : ''
               }`}
             >
+              {item.is_recurring ? (
+                <Repeat
+                  size={14}
+                  strokeWidth={1.5}
+                  className="text-text-secondary mr-1.5 mb-[3px] inline-block align-middle"
+                  aria-label="Staple item"
+                />
+              ) : null}
               {item.name}
               {quantityDisplay ? (
                 <span className="text-text-secondary"> · {quantityDisplay}</span>

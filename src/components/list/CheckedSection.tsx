@@ -11,7 +11,7 @@ interface CheckedSectionProps {
   onToggle: (id: string) => void
   onEdit: (item: ListItemType) => void
   onDelete: (id: string) => void
-  onClearChecked: () => void
+  onFinishShopping: () => void
 }
 
 export function CheckedSection({
@@ -19,7 +19,7 @@ export function CheckedSection({
   onToggle,
   onEdit,
   onDelete,
-  onClearChecked,
+  onFinishShopping,
 }: CheckedSectionProps) {
   const [collapsed, setCollapsed] = useState(true)
   if (items.length === 0) return null
@@ -50,10 +50,10 @@ export function CheckedSection({
         </button>
         <button
           type="button"
-          onClick={onClearChecked}
+          onClick={onFinishShopping}
           className="text-accent min-h-[44px] px-2 text-[13px] font-semibold tracking-wide uppercase"
         >
-          Clear
+          Finish
         </button>
       </div>
       {!collapsed ? (

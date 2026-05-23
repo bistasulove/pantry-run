@@ -67,13 +67,10 @@ export async function runQueuedOp(client: Client, op: QueuedOp): Promise<ExecRes
       return { ok: true }
     }
 
-    // clearChecked
-    const { error } = await client
-      .from('list_items')
-      .delete()
-      .eq('list_id', op.listId)
-      .eq('is_checked', true)
-    if (error) return { ok: false, kind: classify(error), error }
+    // Defensive: pre-M11 `clearChecked` entries may still be sitting in older
+    // IndexedDB queues. Drop them silently — "Finish shopping" is online-only
+    // now, so there's nothing useful to replay.
+    console.warn('[offline-executor] dropping unknown op kind', (op as { kind?: string }).kind)
     return { ok: true }
   } catch (error) {
     return { ok: false, kind: classify(error), error }

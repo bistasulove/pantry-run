@@ -7,6 +7,11 @@ type ListItemRow = Database['public']['Tables']['list_items']['Row']
 // Discriminated union of every mutation `useList` performs against `list_items`.
 // Captured at the call site (with all the data needed to replay), then drained
 // by the executor against Supabase when the network returns.
+//
+// Note: M11 removed the `clearChecked` kind — "Finish shopping" calls an RPC
+// that mutates three tables atomically and is online-only. The executor still
+// silently drops any legacy clearChecked entries that may be sitting in older
+// IndexedDB queues.
 export type QueuedOp =
   | { kind: 'insert'; row: ListItemRow }
   | {
@@ -18,6 +23,7 @@ export type QueuedOp =
           | 'name'
           | 'category'
           | 'is_checked'
+          | 'is_recurring'
           | 'checked_by'
           | 'checked_at'
           | 'quantity'
@@ -28,7 +34,6 @@ export type QueuedOp =
       >
     }
   | { kind: 'delete'; id: string }
-  | { kind: 'clearChecked'; listId: string }
 
 export interface QueuedRecord {
   id: number
