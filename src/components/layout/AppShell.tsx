@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { InstallBanner } from '@/components/layout/InstallBanner'
 import { MissingNameBanner } from '@/components/layout/MissingNameBanner'
 import { OfflineBanner } from '@/components/layout/OfflineBanner'
+import { HouseholdListsRealtime } from '@/components/providers/HouseholdListsRealtime'
 import { HouseholdMembersRealtime } from '@/components/providers/HouseholdMembersRealtime'
 
 interface AppShellProps {
@@ -25,6 +26,7 @@ export function AppShell({ children }: AppShellProps) {
       <SaveAccountBanner />
       <InstallBanner />
       <HouseholdMembersRealtime />
+      <HouseholdListsRealtime />
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       <BottomNav />
     </div>

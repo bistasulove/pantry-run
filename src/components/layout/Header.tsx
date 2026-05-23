@@ -2,21 +2,20 @@
 
 import { Users } from 'lucide-react'
 
+import { ListSwitcherTrigger } from '@/components/list/ListSwitcherTrigger'
 import { useHousehold } from '@/hooks/useHousehold'
 
 import { PresenceIndicator } from './PresenceIndicator'
 import { SyncIndicator } from './SyncIndicator'
 
 export function Header() {
-  const { name, members } = useHousehold()
+  const { members } = useHousehold()
   const memberCount = members.length
 
   return (
     <header className="border-border-default/60 bg-bg-base/95 supports-[backdrop-filter]:bg-bg-base/80 sticky top-0 z-30 border-b backdrop-blur">
-      <div className="flex h-14 items-center justify-between px-4">
-        <h1 className="font-display text-text-primary truncate text-[20px] leading-snug font-semibold">
-          {name ?? 'Your household'}
-        </h1>
+      <div className="flex h-14 items-center justify-between gap-2 px-4">
+        <ListSwitcherTrigger />
         <div className="flex items-center gap-2">
           <SyncIndicator />
           <div

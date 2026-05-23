@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M9 shipped; M10 (Multiple Lists) up next
+ACTIVE: none — M10 shipped; M11 (Recurring / Staple Items) up next
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5.
@@ -41,7 +41,7 @@ Update this line when starting a new milestone. V1 milestone definitions are in 
 | **V1.1 — Continuity & Trust** |                                       |            |
 | M8                            | Item Quantity & Notes                 | ✅ Done    |
 | M9                            | Full Account Upgrade (Email)          | ✅ Done    |
-| M10                           | Multiple Lists per Household          | ⏳ Planned |
+| M10                           | Multiple Lists per Household          | ✅ Done    |
 | M11                           | Recurring / Staple Items + Trip Model | ⏳ Planned |
 | M12                           | Shopping History                      | ⏳ Planned |
 | M13                           | Sentry & Observability                | ⏳ Planned |
@@ -588,7 +588,6 @@ The CI pipeline (GitHub Actions) runs these on every PR and blocks merge on fail
 
 Do not build, plan, or scaffold these until they appear in an active milestone:
 
-- Multiple lists per household
 - Push notifications
 - Recurring / suggested items
 - Email or Google Sign-In (auth upgrade is V1.1)

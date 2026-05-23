@@ -161,18 +161,21 @@ export type Database = {
       lists: {
         Row: {
           created_at: string
+          created_by: string | null
           household_id: string
           id: string
           name: string
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           household_id: string
           id?: string
           name?: string
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           household_id?: string
           id?: string
           name?: string
@@ -346,3 +349,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

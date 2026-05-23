@@ -102,7 +102,7 @@ async function drainQueue(onAfterDrain?: () => void): Promise<void> {
 }
 
 export function useList(): UseListApi {
-  const listId = useHouseholdStore((state) => state.listId)
+  const listId = useHouseholdStore((state) => state.activeListId)
   const userId = useUserStore((state) => state.userId)
 
   const items = useListStore((state) => state.items)
