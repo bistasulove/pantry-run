@@ -20,7 +20,10 @@ export function ResetPasswordRequestForm() {
     setError(null)
     setSubmitting(true)
     const supabase = createClient()
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent('/reset-password/new')}`
+    // Plain path, no query string — /auth/recovery is a dedicated route so
+    // this matches the Supabase redirect allow-list exactly. A ?next= query
+    // param fell through to the Site URL and landed the user on the homepage.
+    const redirectTo = `${window.location.origin}/auth/recovery`
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
       redirectTo,
     })

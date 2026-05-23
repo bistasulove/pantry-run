@@ -179,11 +179,11 @@ set created_at = now() - interval '10 days' where id = '<your anon uid>';`
 - [ ] E.26 — `/sign-in` → "Forgot password?" → `/reset-password` → enter email
       → "If that email is on an account, a reset link is on its way."
       Same copy whether the email exists or not.
-- [ ] E.27 — Click email link in Inbucket → `/auth/callback?code=...&next=
-/reset-password/new` → exchange succeeds → land on
-      `/reset-password/new`. **Critical:** this works even if the
-      recovery user has a household. If they bounce to `/list`, the
-      route-group placement broke.
+- [ ] E.27 — Click email link in Mailpit → `/auth/recovery?code=...` →
+      exchange succeeds → lands on `/reset-password/new`. **Critical:** this
+      works even if the recovery user has a household. If they bounce to
+      `/list`, the route-group placement broke; if they land on the homepage,
+      the `redirectTo` is not in the Supabase redirect allow-list.
 - [ ] E.28 — Set new password (≥ 8, matches confirm) → `/list`. Sign in on
       browser B with new password → success.
 - [ ] E.29 — Click reset link a second time (code already used) → bounces to
