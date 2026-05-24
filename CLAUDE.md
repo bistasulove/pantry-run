@@ -22,30 +22,30 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M12 shipped; M13 (Sentry & Observability) up next
+ACTIVE: M13 — Sentry & Observability
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5.
 
-| #                             | Milestone                             | Status     |
-| ----------------------------- | ------------------------------------- | ---------- |
-| M0                            | Scaffold & Infrastructure             | ✅ Done    |
-| M1                            | Guest Auth & Session Persistence      | ✅ Done    |
-| M2                            | Household Create & Join               | ✅ Done    |
-| M3                            | Shopping List Core (CRUD)             | ✅ Done    |
-| M3.5                          | Testing & Feedback                    | ✅ Done    |
-| M4                            | Real-Time Sync                        | ✅ Done    |
-| M5                            | Offline Support                       | ✅ Done    |
-| M6                            | PWA Polish & Install                  | ✅ Done    |
-| M7                            | QA, Edge Cases & Launch               | ✅ Done    |
-| **V1.1 — Continuity & Trust** |                                       |            |
-| M8                            | Item Quantity & Notes                 | ✅ Done    |
-| M9                            | Full Account Upgrade (Email)          | ✅ Done    |
-| M10                           | Multiple Lists per Household          | ✅ Done    |
-| M11                           | Recurring / Staple Items + Trip Model | ✅ Done    |
-| M12                           | Shopping History                      | ✅ Done    |
-| M13                           | Sentry & Observability                | ⏳ Planned |
-| M14                           | QA, Edge Cases & V1.1 Launch          | ⏳ Planned |
+| #                             | Milestone                             | Status         |
+| ----------------------------- | ------------------------------------- | -------------- |
+| M0                            | Scaffold & Infrastructure             | ✅ Done        |
+| M1                            | Guest Auth & Session Persistence      | ✅ Done        |
+| M2                            | Household Create & Join               | ✅ Done        |
+| M3                            | Shopping List Core (CRUD)             | ✅ Done        |
+| M3.5                          | Testing & Feedback                    | ✅ Done        |
+| M4                            | Real-Time Sync                        | ✅ Done        |
+| M5                            | Offline Support                       | ✅ Done        |
+| M6                            | PWA Polish & Install                  | ✅ Done        |
+| M7                            | QA, Edge Cases & Launch               | ✅ Done        |
+| **V1.1 — Continuity & Trust** |                                       |                |
+| M8                            | Item Quantity & Notes                 | ✅ Done        |
+| M9                            | Full Account Upgrade (Email)          | ✅ Done        |
+| M10                           | Multiple Lists per Household          | ✅ Done        |
+| M11                           | Recurring / Staple Items + Trip Model | ✅ Done        |
+| M12                           | Shopping History                      | ✅ Done        |
+| M13                           | Sentry & Observability                | 🟡 In Progress |
+| M14                           | QA, Edge Cases & V1.1 Launch          | ⏳ Planned     |
 
 ---
 
@@ -89,7 +89,7 @@ npx supabase gen types typescript --local > src/lib/database.types.ts  # Regener
 | Offline    | hand-rolled SW + idb                | `public/sw.js` (no Workbox / next-pwa) + IndexedDB queue & cache                |
 | Icons      | Lucide React                        | `lucide-react` package                                                          |
 | Fonts      | Plus Jakarta Sans, DM Sans, DM Mono | Via `next/font/google`                                                          |
-| Monitoring | _(deferred to end of V1.1)_         | Sentry will be wired in once V1.1 stabilises                                    |
+| Monitoring | Sentry (`@sentry/nextjs`)           | Errors only — no Replay, no Performance, no Profiling (V1.1)                    |
 | Hosting    | Vercel                              | Auto-deploy on push to `main`                                                   |
 
 ---
@@ -115,6 +115,7 @@ pantry-run/
 │   │   ├── api/                      # API route handlers
 │   │   ├── layout.tsx                # Root layout (fonts, providers)
 │   │   ├── page.tsx                  # Root redirect (→ /welcome or /list)
+│   │   ├── global-error.tsx          # Top-level error boundary (M13 Sentry)
 │   │   └── globals.css               # Global styles + CSS custom properties
 │   │
 │   ├── components/
@@ -158,6 +159,7 @@ pantry-run/
 │   │   │   └── server.ts             # Server component Supabase client
 │   │   ├── categories.ts             # Item name → category keyword dictionary
 │   │   ├── database.types.ts         # Generated Supabase TypeScript types
+│   │   ├── hashUserId.ts             # SHA-256 → 16 hex chars (M13 Sentry user id)
 │   │   └── utils.ts                  # General helpers (cn, formatDate, etc.)
 │   │
 │   ├── store/
@@ -165,7 +167,12 @@ pantry-run/
 │   │   ├── householdStore.ts         # householdId, name, members
 │   │   └── listStore.ts              # items, optimistic updates
 │   │
-│   └── proxy.ts                      # Auth proxy (Next.js 16) — protects (app) routes
+│   ├── proxy.ts                      # Auth proxy (Next.js 16) — protects (app) routes
+│   ├── instrumentation.ts            # Server runtime register() hook (M13 Sentry)
+│   └── instrumentation-client.ts     # Client runtime Sentry init (M13)
+│
+├── sentry.server.config.ts           # Node runtime Sentry init (M13)
+├── sentry.edge.config.ts             # Edge runtime Sentry init (M13)
 │
 ├── supabase/
 │   └── migrations/
@@ -204,9 +211,18 @@ pantry-run/
 # Required — get from Supabase dashboard → Settings → API
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-```
 
-> Sentry env vars (`SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`) will be added at the end of V1.1 when Sentry is wired in. Not used in V1.
+# Sentry — optional locally, required in production (M13).
+# Get DSN from Sentry dashboard → Settings → Projects → pantry-run → Client Keys.
+# Leaving NEXT_PUBLIC_SENTRY_DSN unset silently disables Sentry, keeping `npm run dev` quiet.
+NEXT_PUBLIC_SENTRY_DSN=
+SENTRY_DSN=
+
+# Vercel-only — build-time source-map upload. Never put these in .env.local.
+# SENTRY_ORG=
+# SENTRY_PROJECT=
+# SENTRY_AUTH_TOKEN=
+```
 
 Never commit `.env.local`. Never hardcode these values in any file.
 

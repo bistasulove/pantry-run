@@ -1,5 +1,6 @@
 'use client'
 
+import * as Sentry from '@sentry/nextjs'
 import { AlertTriangle } from 'lucide-react'
 import { useEffect } from 'react'
 
@@ -19,9 +20,10 @@ export function ErrorFallback({
   reset,
 }: ErrorFallbackProps) {
   useEffect(() => {
-    // Sentry hook lands here in V1.1. For now, surface to the browser console
-    // so the dev can copy/paste the stack from devtools.
-    console.error('[error-boundary]', error)
+    Sentry.captureException(error, {
+      tags: { boundary: 'route' },
+      contexts: error.digest ? { errorBoundary: { digest: error.digest } } : undefined,
+    })
   }, [error])
 
   return (

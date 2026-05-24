@@ -1,9 +1,11 @@
 'use client'
 
+import * as Sentry from '@sentry/nextjs'
 import type { User } from '@supabase/supabase-js'
 import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 
+import { hashUserId } from '@/lib/hashUserId'
 import { createClient } from '@/lib/supabase/client'
 import { useUserStore } from '@/store/userStore'
 
@@ -26,6 +28,11 @@ function readPendingEmail(user: User): string | null {
   return value
 }
 
+// Track the last user id we've already pushed to Sentry to avoid re-hashing
+// (and re-setting) on every pathname-change refresh. The hash is stable for a
+// given user, so once set it doesn't need to change until sign-out or switch.
+let sentryUserId: string | null = null
+
 function hydrateFromUser(user: User) {
   useUserStore.getState().setUser({
     userId: user.id,
@@ -35,6 +42,21 @@ function hydrateFromUser(user: User) {
     provider: readProvider(user),
     createdAt: user.created_at ?? null,
   })
+
+  if (sentryUserId !== user.id) {
+    sentryUserId = user.id
+    // Fire-and-forget. Hash lands ~1 frame later; any error firing in the
+    // interim is still tied to the previous user (or anonymous) which is the
+    // correct attribution.
+    void hashUserId(user.id).then((hashed) => {
+      Sentry.setUser({ id: hashed })
+    })
+  }
+}
+
+function clearSentryUser() {
+  sentryUserId = null
+  Sentry.setUser(null)
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
@@ -71,6 +93,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         hydrateFromUser(session.user)
       } else {
         useUserStore.getState().clearUser()
+        clearSentryUser()
       }
     })
 

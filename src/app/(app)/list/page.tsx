@@ -19,6 +19,12 @@ import { useListStore } from '@/store/listStore'
 const STAPLE_HINT_KEY = 'pr_seen_staple_hint'
 
 export default function ListPage() {
+  // M13 verification seam — removed in the follow-up commit once Sentry
+  // confirms the event in the dashboard. Visit /list?__throw=1 to fire.
+  if (typeof window !== 'undefined' && window.location.search.includes('__throw=1')) {
+    throw new Error('M13 verification: deliberate client throw from /list')
+  }
+
   const {
     items,
     isLoading,
