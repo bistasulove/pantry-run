@@ -38,7 +38,7 @@ export function AppSplash() {
   if (unmounted) return null
 
   return (
-    <div aria-hidden className={`app-splash${hidden ? 'app-splash--hidden' : ''}`}>
+    <div aria-hidden className={hidden ? 'app-splash app-splash--hidden' : 'app-splash'}>
       <div className="app-splash-spinner" />
       <p className="app-splash-message" suppressHydrationWarning>
         {message}
