@@ -9,30 +9,31 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Toast, type ToastOptions } from '@/components/ui/Toast'
 import { createClient } from '@/lib/supabase/client'
+import { useHouseholdStore } from '@/store/householdStore'
 import { useUserStore } from '@/store/userStore'
 
-interface SettingsViewProps {
-  memberRowId: string
-  initialDisplayName: string
-}
-
-export function SettingsView({ memberRowId, initialDisplayName }: SettingsViewProps) {
+export function SettingsView() {
+  const userId = useUserStore((s) => s.userId)
+  const displayName = useUserStore((s) => s.displayName)
   const setDisplayName = useUserStore((s) => s.setDisplayName)
-  const [name, setName] = useState(initialDisplayName)
+  const householdId = useHouseholdStore((s) => s.householdId)
+
+  const [name, setName] = useState(displayName ?? '')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<ToastOptions | null>(null)
 
   const trimmed = name.trim().slice(0, 40)
-  const canSave = trimmed.length > 0 && !saving
+  const canSave = trimmed.length > 0 && !saving && trimmed !== (displayName ?? '')
 
   async function handleSave() {
-    if (!canSave) return
+    if (!canSave || !userId || !householdId) return
     setSaving(true)
     const supabase = createClient()
     const { error } = await supabase
       .from('household_members')
       .update({ display_name: trimmed })
-      .eq('id', memberRowId)
+      .eq('user_id', userId)
+      .eq('household_id', householdId)
     setSaving(false)
     if (error) {
       console.error('[settings] save failed', error)

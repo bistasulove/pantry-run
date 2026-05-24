@@ -3,7 +3,7 @@
 import * as Sentry from '@sentry/nextjs'
 import type { User } from '@supabase/supabase-js'
 import { usePathname } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { hashUserId } from '@/lib/hashUserId'
 import { clearCachedSentryUserId, setCachedSentryUserId } from '@/lib/sentry-user-cache'
@@ -62,8 +62,11 @@ function clearSentryUser() {
   clearCachedSentryUserId()
 }
 
+const AUTH_CALLBACK_PATH = '/auth/callback'
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const previousPathnameRef = useRef<string | null>(null)
 
   // One-time bootstrap + subscribe to client-side auth events (sign-in,
   // sign-out, token refresh, in-tab USER_UPDATED). These cover the flows
@@ -106,12 +109,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Refresh user data on every route change to catch out-of-band session
-  // updates — specifically /auth/callback's exchangeCodeForSession, which
-  // flips is_anonymous and clears new_email on the server but emits no
-  // client-side auth event (the listener only fires for client-initiated
-  // changes). Without this, userStore stays stale after a confirmed email
-  // upgrade until the user does a full reload.
+  // Refresh user data only around /auth/callback transitions. The original
+  // purpose was to catch exchangeCodeForSession's side effects (flipping
+  // is_anonymous, clearing new_email) which emit no client-side auth event.
+  // Running this on every tab nav added a Supabase round trip per click for
+  // no benefit. Gated to "current path is /auth/callback" or "previous path
+  // was /auth/callback" so we catch both the arrival and the redirect away.
   //
   // Two-step (getSession then getUser) so signed-out routes don't trigger a
   // network call and log "Auth session missing!" noise. getUser() (vs
@@ -119,6 +122,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // object always reflects the latest server state — getSession() would
   // return the in-memory cached session which can be stale.
   useEffect(() => {
+    const previousPathname = previousPathnameRef.current
+    previousPathnameRef.current = pathname
+    const isAuthCallback = pathname === AUTH_CALLBACK_PATH
+    const wasAuthCallback = previousPathname === AUTH_CALLBACK_PATH
+    if (!isAuthCallback && !wasAuthCallback) return
+
     const supabase = createClient()
     let cancelled = false
 
