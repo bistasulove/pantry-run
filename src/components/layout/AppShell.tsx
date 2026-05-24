@@ -6,6 +6,7 @@ import { MissingNameBanner } from '@/components/layout/MissingNameBanner'
 import { OfflineBanner } from '@/components/layout/OfflineBanner'
 import { HouseholdListsRealtime } from '@/components/providers/HouseholdListsRealtime'
 import { HouseholdMembersRealtime } from '@/components/providers/HouseholdMembersRealtime'
+import { HouseholdSentryTag } from '@/components/providers/HouseholdSentryTag'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -27,6 +28,7 @@ export function AppShell({ children }: AppShellProps) {
       <InstallBanner />
       <HouseholdMembersRealtime />
       <HouseholdListsRealtime />
+      <HouseholdSentryTag />
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       <BottomNav />
     </div>
