@@ -187,14 +187,14 @@ For each device, run a subset of §B + the most relevant §C cases.
 
 Temporary verification seams added on a branch, removed at close-out.
 
-- [ ] E.1 — Build with seams; deploy to a Vercel preview (or hit a
-      local prod build with prod DSN).
-- [ ] E.2 — `?__throw=1` on a list-route URL → ErrorFallback renders →
-      Sentry event arrives with `boundary=route` tag, hashed `user.id`,
-      `household_id` tag, source-map-resolved frames.
-- [ ] E.3 — `?__reject=1` → unhandled promise rejection → Sentry event
-      arrives. Confirm it's caught by the default
-      `onunhandledrejection` integration, not swallowed.
+- [x] E.1 — Seams shipped to master (`11bdc5e`); Vercel auto-deployed
+      to prod. _(2026-05-24)_
+- [x] E.2 — `?__throw=1` on `/list` → ErrorFallback renders → Sentry
+      event arrives with `boundary=route` tag, hashed `user.id`,
+      `household_id` tag, source-map-resolved frames. _(2026-05-24)_
+- [x] E.3 — `?__reject=1` → unhandled promise rejection → Sentry event
+      arrives via default `onunhandledrejection` integration.
+      _(2026-05-24)_
 - [ ] E.4 — Remove both seams; rebuild; reconfirm `?__throw=1` and
       `?__reject=1` are no-ops in the close-out build.
 

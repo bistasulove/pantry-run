@@ -1,7 +1,6 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { AddItemBar } from '@/components/list/AddItemBar'
 import { CategorySection } from '@/components/list/CategorySection'
@@ -35,23 +34,6 @@ export default function ListPage() {
   const [toast, setToast] = useState<ToastOptions | null>(null)
   const [doneOpen, setDoneOpen] = useState(false)
   const [finishing, setFinishing] = useState(false)
-
-  // M14 Sentry seam — REMOVE AT CLOSE-OUT.
-  // ?__reject=1 fires an unhandled promise rejection so Sentry's default
-  // onunhandledrejection global handler captures it (E.3 of m14_test_plan).
-  const searchParams = useSearchParams()
-  useEffect(() => {
-    if (searchParams.get('__reject') === '1') {
-      void Promise.reject(new Error('M14 verification: unhandled rejection'))
-    }
-  }, [searchParams])
-
-  // M14 Sentry seam — REMOVE AT CLOSE-OUT.
-  // ?__throw=1 throws synchronously during render so the route ErrorFallback
-  // catches it and Sentry.captureException fires with boundary=route (E.2).
-  if (searchParams.get('__throw') === '1') {
-    throw new Error('M14 verification: route boundary throw')
-  }
 
   const { activeByCategory, checkedItems } = useMemo(() => {
     const checked: ListItem[] = []
