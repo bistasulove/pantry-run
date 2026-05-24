@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 
 import { hashUserId } from '@/lib/hashUserId'
+import { clearCachedSentryUserId, setCachedSentryUserId } from '@/lib/sentry-user-cache'
 import { createClient } from '@/lib/supabase/client'
 import { useUserStore } from '@/store/userStore'
 
@@ -46,10 +47,11 @@ function hydrateFromUser(user: User) {
   if (sentryUserId !== user.id) {
     sentryUserId = user.id
     // Fire-and-forget. Hash lands ~1 frame later; any error firing in the
-    // interim is still tied to the previous user (or anonymous) which is the
-    // correct attribution.
+    // interim falls back to the cached hash from localStorage (set on the
+    // previous session by setCachedSentryUserId below).
     void hashUserId(user.id).then((hashed) => {
       Sentry.setUser({ id: hashed })
+      setCachedSentryUserId(hashed)
     })
   }
 }
@@ -57,6 +59,7 @@ function hydrateFromUser(user: User) {
 function clearSentryUser() {
   sentryUserId = null
   Sentry.setUser(null)
+  clearCachedSentryUserId()
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
