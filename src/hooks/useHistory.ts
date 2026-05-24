@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { loadTripsSnapshot, saveTripsSnapshot } from '@/lib/offline/cache'
 import { createClient } from '@/lib/supabase/client'
 import { useHouseholdStore } from '@/store/householdStore'
 
@@ -62,31 +63,39 @@ export function useHistory(): UseHistoryApi {
     tripsRef.current = trips
   }, [trips])
 
-  const fetchFirstPage = useCallback(async (): Promise<void> => {
-    if (!householdId) return
-    setIsLoading(true)
-    setError(null)
-    const supabase = createClient()
-    // Fetch PAGE_SIZE + 1 to determine hasMore without a separate count query.
-    const { data, error: fetchError } = await supabase
-      .from('shopping_trips')
-      .select('id, finished_at, finished_by, item_count, list_id, lists(name)')
-      .eq('household_id', householdId)
-      .order('finished_at', { ascending: false })
-      .limit(PAGE_SIZE + 1)
+  const fetchFirstPage = useCallback(
+    async (options?: { silent?: boolean }): Promise<void> => {
+      if (!householdId) return
+      // Skip the loading state when we have cached trips painted already —
+      // the user sees yesterday's history immediately and we reconcile in
+      // the background. Initial fetch with no cache still shows a skeleton.
+      if (!options?.silent) setIsLoading(true)
+      setError(null)
+      const supabase = createClient()
+      // Fetch PAGE_SIZE + 1 to determine hasMore without a separate count query.
+      const { data, error: fetchError } = await supabase
+        .from('shopping_trips')
+        .select('id, finished_at, finished_by, item_count, list_id, lists(name)')
+        .eq('household_id', householdId)
+        .order('finished_at', { ascending: false })
+        .limit(PAGE_SIZE + 1)
 
-    if (fetchError) {
-      console.error('[useHistory] fetch failed', fetchError)
-      setError("Couldn't load shopping history. Try again.")
-      setIsLoading(false)
-      return
-    }
-    const rows = (data ?? []) as TripRow[]
-    const more = rows.length > PAGE_SIZE
-    setTrips(rows.slice(0, PAGE_SIZE).map(rowToSummary))
-    setHasMore(more)
-    setIsLoading(false)
-  }, [householdId])
+      if (fetchError) {
+        console.error('[useHistory] fetch failed', fetchError)
+        setError("Couldn't load shopping history. Try again.")
+        if (!options?.silent) setIsLoading(false)
+        return
+      }
+      const rows = (data ?? []) as TripRow[]
+      const more = rows.length > PAGE_SIZE
+      const summaries = rows.slice(0, PAGE_SIZE).map(rowToSummary)
+      setTrips(summaries)
+      setHasMore(more)
+      if (!options?.silent) setIsLoading(false)
+      void saveTripsSnapshot(householdId, summaries, more)
+    },
+    [householdId],
+  )
 
   const loadMore = useCallback(async (): Promise<void> => {
     if (!householdId) return
@@ -120,9 +129,21 @@ export function useHistory(): UseHistoryApi {
   useEffect(() => {
     if (!householdId) return
     let cancelled = false
+
+    // Hydrate from the cached first page immediately so /history paints
+    // last-known trips instead of a skeleton on every tab switch, then
+    // reconcile with the network. No cache → fall back to the skeleton.
     void (async () => {
+      const cached = await loadTripsSnapshot(householdId)
       if (cancelled) return
-      await fetchFirstPage()
+      if (cached && cached.trips.length > 0) {
+        setTrips((prev) => (prev.length === 0 ? cached.trips : prev))
+        setHasMore(cached.hasMore)
+        setIsLoading(false)
+        await fetchFirstPage({ silent: true })
+      } else {
+        await fetchFirstPage()
+      }
     })()
 
     const supabase = createClient()

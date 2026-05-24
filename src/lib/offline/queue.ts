@@ -44,7 +44,10 @@ export interface QueuedRecord {
 type QueuedRecordInput = Omit<QueuedRecord, 'id'>
 
 const DB_NAME = 'pantry-run-offline'
-const DB_VERSION = 1
+// v2: added 'trip-snapshots' for the M12 history first-page cache. Kept in
+// lockstep with cache.ts — whichever module opens the DB first runs the
+// upgrade, so both upgrade callbacks have to create every store.
+const DB_VERSION = 2
 const QUEUE_STORE = 'write-queue'
 
 let dbPromise: Promise<IDBPDatabase> | null = null
@@ -60,6 +63,9 @@ function getDb(): Promise<IDBPDatabase> {
         }
         if (!db.objectStoreNames.contains('list-snapshots')) {
           db.createObjectStore('list-snapshots', { keyPath: 'listId' })
+        }
+        if (!db.objectStoreNames.contains('trip-snapshots')) {
+          db.createObjectStore('trip-snapshots', { keyPath: 'householdId' })
         }
       },
     })
