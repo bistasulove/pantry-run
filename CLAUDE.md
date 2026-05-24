@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M13 shipped; M14 (QA, Edge Cases & V1.1 Launch) up next
+ACTIVE: M14 — QA, Edge Cases & V1.1 Launch
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5.

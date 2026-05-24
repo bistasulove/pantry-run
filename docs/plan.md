@@ -763,12 +763,12 @@ Mirrors M7 for V1.1 — real-device sweep, Lighthouse audit, cross-browser. Plus
 
 - Full happy-path on real devices across the new flows: account upgrade → multi-list create → mark staples → finish shopping → review history → restore from history.
 - V1.1-specific edge cases:
-  - Account upgrade with offline pending writes — `updateUser` queued and replayed after reconnect
+  - Offline account upgrade attempt — blocked with a friendly "Connect to the internet…" message (no plaintext password persisted; per M9 shipped behaviour, not queued — original "queued and replayed" deliverable amended at M14 kickoff to match what shipped)
   - Switching active list while offline — `activeListId` persists, realtime resubscribes on reconnect
   - Recurring-only list → "Finish shopping" should be disabled (nothing to remove)
   - History restore when the source list has been deleted — restore targets current active list
   - Concurrent Finish Shopping by two members on the same list — server RPC serialises per `list_id`
-  - Google OAuth callback on a domain installed as a PWA (callback should return to the installed app, not a fresh browser tab)
+  - _(Google OAuth callback test cut at M14 kickoff — Google Sign-In was descoped to V2 in M9; no OAuth surface exists in V1.1)_
 - Lighthouse audit: Performance ≥ 85, Accessibility ≥ 90, Best Practices ≥ 90, PWA ✓.
 - Cross-browser sweep: Chrome (Android), Safari (iOS), Chrome (desktop), Safari (desktop), Firefox (desktop).
 - Sentry confirmed receiving events for both error-boundary triggers and unhandled rejections.
