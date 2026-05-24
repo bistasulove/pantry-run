@@ -22,16 +22,35 @@ export function AppSplash() {
   const [unmounted, setUnmounted] = useState(false)
 
   useEffect(() => {
-    // rAF guarantees one paint with the splash visible before the fade
-    // begins — without it, a fast hydration can flip `hidden` to true
-    // before the browser ever paints opacity:1, and the user sees nothing.
-    const rafId = requestAnimationFrame(() => setHidden(true))
-    // Drop the node entirely once the fade has finished so it can't catch
-    // stray pointer events or screen-reader focus.
-    const unmountId = window.setTimeout(() => setUnmounted(true), 800)
+    // Guaranteed minimum visible window. A fast iPhone PWA can hydrate
+    // within a frame of HTML paint, and the global prefers-reduced-motion
+    // rule in globals.css collapses every transition to 0.01ms — so a
+    // rAF-only trigger would render the splash imperceptibly short for a
+    // sizeable chunk of users. 700ms is long enough to read the one-liner
+    // and notice the spinner, short enough not to feel intrusive when
+    // everything else is warm.
+    const MIN_VISIBLE_MS = 700
+    const FADE_MS = 350
+    const fadeId = window.setTimeout(() => setHidden(true), MIN_VISIBLE_MS)
+    const unmountId = window.setTimeout(() => setUnmounted(true), MIN_VISIBLE_MS + FADE_MS)
+
+    // iOS bfcache: when the PWA is restored from memory (swipe-up away and
+    // back), pageshow fires with persisted=true and the existing React tree
+    // is reused — including any already-unmounted splash state. Re-show on
+    // restore so returning users still get the loading hint.
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return
+      setUnmounted(false)
+      setHidden(false)
+      window.setTimeout(() => setHidden(true), MIN_VISIBLE_MS)
+      window.setTimeout(() => setUnmounted(true), MIN_VISIBLE_MS + FADE_MS)
+    }
+    window.addEventListener('pageshow', handlePageShow)
+
     return () => {
-      cancelAnimationFrame(rafId)
+      window.clearTimeout(fadeId)
       window.clearTimeout(unmountId)
+      window.removeEventListener('pageshow', handlePageShow)
     }
   }, [])
 
