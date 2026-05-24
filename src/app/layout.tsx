@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { DM_Mono, DM_Sans, Plus_Jakarta_Sans } from 'next/font/google'
 
+import { AppSplash } from '@/components/layout/AppSplash'
 import { AuthErrorHashHandler } from '@/components/providers/AuthErrorHashHandler'
 import { ServiceWorkerRegistrar } from '@/components/providers/ServiceWorkerRegistrar'
 import { SessionProvider } from '@/components/providers/SessionProvider'
@@ -82,6 +83,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: AUTH_ERROR_HASH_CAPTURE_SCRIPT }} />
       </head>
       <body>
+        <AppSplash />
         <ServiceWorkerRegistrar />
         <SessionProvider>{children}</SessionProvider>
         <AuthErrorHashHandler />
