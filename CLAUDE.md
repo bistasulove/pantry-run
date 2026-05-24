@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M11 shipped; M12 (Shopping History) up next
+ACTIVE: none — M12 shipped; M13 (Sentry & Observability) up next
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5.
@@ -43,7 +43,7 @@ Update this line when starting a new milestone. V1 milestone definitions are in 
 | M9                            | Full Account Upgrade (Email)          | ✅ Done    |
 | M10                           | Multiple Lists per Household          | ✅ Done    |
 | M11                           | Recurring / Staple Items + Trip Model | ✅ Done    |
-| M12                           | Shopping History                      | ⏳ Planned |
+| M12                           | Shopping History                      | ✅ Done    |
 | M13                           | Sentry & Observability                | ⏳ Planned |
 | M14                           | QA, Edge Cases & V1.1 Launch          | ⏳ Planned |
 
@@ -109,6 +109,7 @@ pantry-run/
 │   │   │   └── join/page.tsx         # Join with invite code
 │   │   ├── (app)/                    # Authenticated routes (session required)
 │   │   │   ├── list/page.tsx         # Main shopping list
+│   │   │   ├── history/page.tsx      # Shopping history (M12)
 │   │   │   ├── household/page.tsx    # Household management
 │   │   │   └── settings/page.tsx     # User settings
 │   │   ├── api/                      # API route handlers
@@ -129,6 +130,11 @@ pantry-run/
 │   │   │   ├── CategorySection.tsx   # Collapsible category group
 │   │   │   ├── CheckedSection.tsx    # Collapsed checked items group
 │   │   │   └── EmptyState.tsx
+│   │   ├── history/                  # M12 history components
+│   │   │   ├── TripCard.tsx          # Single trip row
+│   │   │   ├── TripDetailSheet.tsx   # Trip items + restore actions
+│   │   │   ├── MonthGroup.tsx        # Month section heading
+│   │   │   └── EmptyState.tsx        # No-trips / offline empty
 │   │   ├── household/
 │   │   │   ├── InviteCode.tsx        # Invite code display + share
 │   │   │   └── MemberList.tsx
@@ -141,6 +147,8 @@ pantry-run/
 │   │   ├── useSession.ts             # Auth session state
 │   │   ├── useHousehold.ts           # Current household + members
 │   │   ├── useList.ts                # List items + Realtime subscription
+│   │   ├── useHistory.ts             # Shopping trips (M12) + Realtime INSERT
+│   │   ├── useTripItems.ts           # Lazy fetch for one trip's items
 │   │   ├── useOfflineQueue.ts        # IndexedDB write queue
 │   │   └── useNetworkStatus.ts       # Online/offline detection
 │   │

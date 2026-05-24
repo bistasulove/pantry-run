@@ -1,11 +1,12 @@
 'use client'
 
-import { Home, Settings, Users } from 'lucide-react'
+import { Clock, Home, Settings, Users } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const TABS = [
   { href: '/list', label: 'List', Icon: Home },
+  { href: '/history', label: 'History', Icon: Clock },
   { href: '/household', label: 'Household', Icon: Users },
   { href: '/settings', label: 'Settings', Icon: Settings },
 ] as const
@@ -19,7 +20,7 @@ export function BottomNav() {
       className="border-border-default/60 bg-bg-surface/95 sticky bottom-0 z-30 border-t backdrop-blur"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <ul className="grid grid-cols-3">
+      <ul className="grid grid-cols-4">
         {TABS.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname?.startsWith(`${href}/`)
           return (

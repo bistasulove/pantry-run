@@ -20,6 +20,17 @@ export type FinishShoppingResult =
   | { ok: true; removed: number; kept: number; tripId: string | null }
   | { ok: false; error: string }
 
+export interface RestoreItemSnapshot {
+  name: string
+  category: string
+  quantity: string | null
+  quantity_value: number | null
+  quantity_unit: string | null
+  note: string | null
+}
+
+export type RestoreItemResult = { ok: true } | { ok: false; error: string }
+
 export interface UseListApi {
   items: ListItem[]
   isLoading: boolean
@@ -39,6 +50,7 @@ export interface UseListApi {
   deleteItem: (id: string) => Promise<ListItem | null>
   undoDelete: (item: ListItem) => Promise<void>
   finishShopping: () => Promise<FinishShoppingResult>
+  restoreItem: (snapshot: RestoreItemSnapshot) => Promise<RestoreItemResult>
 }
 
 // A TypeError from fetch (DNS, offline, socket reset) is the universal sign
@@ -656,6 +668,86 @@ export function useList(): UseListApi {
     }
   }, [listId])
 
+  // M12: Restore a snapshot from shopping_trip_items into the active list.
+  // Mirrors addItem's optimistic + offline-queue flow but uses the trip
+  // snapshot's category / quantity / note directly instead of running the
+  // detectCategory keyword pass.
+  const restoreItem = useCallback(
+    async (snapshot: RestoreItemSnapshot): Promise<RestoreItemResult> => {
+      if (!listId) return { ok: false, error: 'No active list.' }
+      const name = snapshot.name.trim()
+      if (!name) return { ok: false, error: 'Item name is empty.' }
+
+      const supabase = createClient()
+      const id = crypto.randomUUID()
+      const now = new Date().toISOString()
+      const maxSort = itemsRef.current.reduce((acc, i) => Math.max(acc, i.sort_order), 0)
+
+      const optimistic: ListItem = {
+        id,
+        list_id: listId,
+        added_by: userId,
+        added_by_name: null,
+        name,
+        quantity: snapshot.quantity,
+        quantity_value: snapshot.quantity_value,
+        quantity_unit: snapshot.quantity_unit,
+        category: snapshot.category,
+        is_checked: false,
+        is_recurring: false,
+        checked_by: null,
+        checked_at: null,
+        note: snapshot.note,
+        sort_order: maxSort + 1,
+        created_at: now,
+        updated_at: now,
+      }
+
+      useListStore.getState().addItemOptimistic(optimistic)
+
+      const payload: ListItemInsert = {
+        id,
+        list_id: listId,
+        added_by: userId ?? undefined,
+        name,
+        category: snapshot.category,
+        quantity: snapshot.quantity,
+        quantity_value: snapshot.quantity_value,
+        quantity_unit: snapshot.quantity_unit,
+        note: snapshot.note,
+        sort_order: maxSort + 1,
+      }
+
+      useSyncStore.getState().beginWrite()
+      let succeeded = false
+      try {
+        const { error } = await supabase.from('list_items').insert(payload)
+        if (error) {
+          if (isNetworkError(error)) {
+            await pushToQueue({ kind: 'insert', row: optimistic })
+            return { ok: true }
+          }
+          console.error('[useList] restore failed', error)
+          useListStore.getState().removeItemOptimistic(id)
+          return { ok: false, error: "Couldn't restore that item. Try again." }
+        }
+        succeeded = true
+        return { ok: true }
+      } catch (error) {
+        if (isNetworkError(error)) {
+          await pushToQueue({ kind: 'insert', row: optimistic })
+          return { ok: true }
+        }
+        console.error('[useList] restore threw', error)
+        useListStore.getState().removeItemOptimistic(id)
+        return { ok: false, error: "Couldn't restore that item. Try again." }
+      } finally {
+        useSyncStore.getState().endWrite(succeeded)
+      }
+    },
+    [listId, userId],
+  )
+
   return {
     items,
     isLoading,
@@ -665,5 +757,6 @@ export function useList(): UseListApi {
     deleteItem,
     undoDelete,
     finishShopping,
+    restoreItem,
   }
 }
