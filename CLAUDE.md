@@ -22,30 +22,30 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: M14 — QA, Edge Cases & V1.1 Launch
+ACTIVE: none — V1.1 shipped; V2 up next
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5.
 
-| #                             | Milestone                             | Status     |
-| ----------------------------- | ------------------------------------- | ---------- |
-| M0                            | Scaffold & Infrastructure             | ✅ Done    |
-| M1                            | Guest Auth & Session Persistence      | ✅ Done    |
-| M2                            | Household Create & Join               | ✅ Done    |
-| M3                            | Shopping List Core (CRUD)             | ✅ Done    |
-| M3.5                          | Testing & Feedback                    | ✅ Done    |
-| M4                            | Real-Time Sync                        | ✅ Done    |
-| M5                            | Offline Support                       | ✅ Done    |
-| M6                            | PWA Polish & Install                  | ✅ Done    |
-| M7                            | QA, Edge Cases & Launch               | ✅ Done    |
-| **V1.1 — Continuity & Trust** |                                       |            |
-| M8                            | Item Quantity & Notes                 | ✅ Done    |
-| M9                            | Full Account Upgrade (Email)          | ✅ Done    |
-| M10                           | Multiple Lists per Household          | ✅ Done    |
-| M11                           | Recurring / Staple Items + Trip Model | ✅ Done    |
-| M12                           | Shopping History                      | ✅ Done    |
-| M13                           | Sentry & Observability                | ✅ Done    |
-| M14                           | QA, Edge Cases & V1.1 Launch          | ⏳ Planned |
+| #                             | Milestone                             | Status  |
+| ----------------------------- | ------------------------------------- | ------- |
+| M0                            | Scaffold & Infrastructure             | ✅ Done |
+| M1                            | Guest Auth & Session Persistence      | ✅ Done |
+| M2                            | Household Create & Join               | ✅ Done |
+| M3                            | Shopping List Core (CRUD)             | ✅ Done |
+| M3.5                          | Testing & Feedback                    | ✅ Done |
+| M4                            | Real-Time Sync                        | ✅ Done |
+| M5                            | Offline Support                       | ✅ Done |
+| M6                            | PWA Polish & Install                  | ✅ Done |
+| M7                            | QA, Edge Cases & Launch               | ✅ Done |
+| **V1.1 — Continuity & Trust** |                                       |         |
+| M8                            | Item Quantity & Notes                 | ✅ Done |
+| M9                            | Full Account Upgrade (Email)          | ✅ Done |
+| M10                           | Multiple Lists per Household          | ✅ Done |
+| M11                           | Recurring / Staple Items + Trip Model | ✅ Done |
+| M12                           | Shopping History                      | ✅ Done |
+| M13                           | Sentry & Observability                | ✅ Done |
+| M14                           | QA, Edge Cases & V1.1 Launch          | ✅ Done |
 
 ---
 

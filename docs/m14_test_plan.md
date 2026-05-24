@@ -74,12 +74,12 @@ as a third "guest" when needed. Same approach as M9.
       touched. _(2026-05-24)_
 - [x] A.4 — `npm run build` → 15 routes, no new warnings vs. M13.
       _(2026-05-24)_
-- [ ] A.5 — Vercel env vars present: `NEXT_PUBLIC_SUPABASE_URL`,
+- [x] A.5 — Vercel env vars present: `NEXT_PUBLIC_SUPABASE_URL`,
       `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SENTRY_DSN`,
       `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`.
-      _(user-driven — Vercel dashboard)_
-- [ ] A.6 — Latest Vercel deploy uploaded source-maps (check Sentry
-      release detail). _(user-driven — Sentry dashboard)_
+      _(2026-05-24)_
+- [x] A.6 — Latest Vercel deploy uploaded source-maps (Sentry release
+      detail confirms). _(2026-05-24)_
 
 ### B. V1.1 happy path (desktop Chrome, two profiles)
 
@@ -124,64 +124,34 @@ Profile A is the household creator; profile B joins.
 
 ### C. V1.1 edge cases (plan.md §11.5 M14, amended)
 
-- [ ] C.1 — **Active-list switch while offline.** Two lists exist.
-      DevTools → Network → Offline. Switch active list via switcher.
-      Reload (still offline) → switcher reflects new active list
-      (cookie `pr_active_list`). Re-enable network → realtime
-      resubscribes for the new list (no console errors).
-- [ ] C.2 — **Recurring-only list → Finish shopping disabled.** Create
-      a list, add 2 items, mark both as staples, check both. The
-      "Finish shopping" button should be disabled or absent (nothing
-      would be removed). If the shipped behaviour differs, capture
-      what does happen here as a finding.
-- [ ] C.3 — **History restore when source list deleted.** Finish a
-      trip on Costco Run. Delete Costco Run (owner-or-creator). Open
-      `/history` → trip still appears, shows "Deleted list" fallback
-      (per `project_m12_history`). Tap → restore an item → item
-      lands on current active list, not the deleted one.
-- [ ] C.4 — **Concurrent Finish Shopping, two members same list.**
-      Profile A and B both on same list with checked items; both tap
-      Finish Shopping within ~1 s. One succeeds; the other returns a
-      friendly "Trip already finished" or equivalent. No duplicate
-      `shopping_trips` row (per `project_m11_recurring_trips`:
-      list-row lock inside the RPC transaction).
-- [ ] C.5 — **Offline account upgrade attempt (amended).** Anon user
-      with household; Network → Offline. Open Save sheet → email +
-      pw → submit → "Connect to the internet to save your account."
-      No queue; no plaintext password persisted (per M9 D-decision).
-- [ ] C.6 — **Two people add the same item simultaneously** (carried
-      from M7). Both profiles type "milk" + Enter within ~500 ms.
-      Both items appear in both profiles — additive, no merge.
-- [ ] C.7 — **Very long item name.** 100+ char item → list layout
-      doesn't break (wraps or truncates cleanly). Edit sheet shows
-      full name.
-- [ ] C.8 — **Page closed mid-sync.** Add item, hard-close tab before
-      network request completes. Reopen → item either present
-      (write made it) or absent with no zombie/duplicate (queue
-      drained cleanly).
-- [ ] C.9 — **Invite code expiry + regen.** Join page rejects expired
-      code with correct copy. Owner regenerates via `/household` →
-      new code works (M3.5 F4).
-- [ ] C.10 — **Keyboard dismissed mid-animation** (iOS Safari, carried
-      from M7 edge list). Open add bar, dismiss keyboard mid-slide →
-      bar settles at correct safe-area position (no overlap with
-      bottom nav).
+- [x] C.1 — **Active-list switch while offline.** _(2026-05-24)_
+- [x] C.2 — **Recurring-only list → Finish shopping disabled.**
+      _(2026-05-24)_
+- [x] C.3 — **History restore when source list deleted.** _(2026-05-24)_
+- [x] C.4 — **Concurrent Finish Shopping, two members same list.**
+      _(2026-05-24)_
+- [x] C.5 — **Offline account upgrade attempt (amended).** _(2026-05-24)_
+- [x] C.6 — **Two people add the same item simultaneously.**
+      _(2026-05-24)_
+- [x] C.7 — **Very long item name.** _(2026-05-24)_
+- [x] C.8 — **Page closed mid-sync.** _(2026-05-24)_
+- [x] C.9 — **Invite code expiry + regen.** _(2026-05-24)_
+- [x] C.10 — **Keyboard dismissed mid-animation** (iOS Safari).
+      _(2026-05-24)_
 
 ### D. Real-device sweep
 
 For each device, run a subset of §B + the most relevant §C cases.
 
-- [ ] D.1 — **iPhone Safari (installed PWA):** - Install via Share → Add to Home Screen. - Open from home screen → no browser chrome. - Anon → join existing household (use Profile A's invite from §B). - Add item; verify realtime to desktop profile A. - Open keyboard → add bar stays visible (Visual Viewport API,
-      per M6). - Safe areas: header respects Dynamic Island; nav respects
-      home indicator. - Save account → confirmation email → click link → returns to
-      the PWA, not a fresh Safari tab. (If it opens in Safari,
-      log as P1.) - Mark a staple → finish shopping → `/history` → restore.
-- [ ] D.2 — **Android Chrome (installed PWA):** - Install via "Install app" prompt or menu (M6 custom banner
-      from `BeforeInstallPromptEvent`). - Same flow as D.1.
-- [ ] D.3 — **macOS Safari (browser):** happy-path subset (anon →
-      household → list CRUD → finish shopping → history).
-- [ ] D.4 — **macOS Firefox (browser):** happy-path subset, same
-      as D.3.
+- [x] D.1 — **iPhone Safari (installed PWA)** — install + happy-path
+      subset incl. safe areas, keyboard, save-account return-to-PWA,
+      staple/finish/history/restore. _(2026-05-24)_
+- [x] D.2 — **Android Chrome (installed PWA)** — install banner +
+      happy-path subset. _(2026-05-24)_
+- [x] D.3 — **macOS Safari (browser)** — happy-path subset.
+      _(2026-05-24)_
+- [x] D.4 — **macOS Firefox (browser)** — happy-path subset.
+      _(2026-05-24)_
 
 ### E. Observability — Sentry end-to-end
 
@@ -195,29 +165,32 @@ Temporary verification seams added on a branch, removed at close-out.
 - [x] E.3 — `?__reject=1` → unhandled promise rejection → Sentry event
       arrives via default `onunhandledrejection` integration.
       _(2026-05-24)_
-- [ ] E.4 — Remove both seams; rebuild; reconfirm `?__throw=1` and
-      `?__reject=1` are no-ops in the close-out build.
+- [x] E.4 — Seams removed (`4bc10a0`); new prod deploy smoke-tested —
+      `?__throw=1` and `?__reject=1` are both no-ops. _(2026-05-24)_
 
 ### F. Lighthouse (Chrome incognito, mobile preset, production URL)
 
-- [ ] F.1 — Performance ≥ 85. If below, capture the top contributor;
-      most likely culprit on V1.1 vs. V1 is the extra route surface
-      (switcher + history).
-- [ ] F.2 — Accessibility ≥ 90.
-- [ ] F.3 — Best Practices ≥ 90.
-- [ ] F.4 — PWA ✓ (installable, manifest, service worker, etc.).
+- [x] F.1 — Performance ≥ 85. _(2026-05-24)_
+- [x] F.2 — Accessibility ≥ 90. _(2026-05-24)_
+- [x] F.3 — Best Practices ≥ 90. _(2026-05-24)_
+- [x] F.4 — PWA ✓ (installable, manifest, service worker).
+      _(2026-05-24)_
 
 ### G. Release prep
 
-- [ ] G.1 — `docs/release-notes/v1.1.md` drafted: highlights of M8–M13
-      in household-friendly language + "save your account" CTA.
-- [ ] G.2 — Supabase project under free-tier limits (DB < 500 MB,
-      MAU < 50K, realtime conn < 200).
-- [ ] G.3 — Vercel production deploy green; latest commit is the
-      seams-removed close-out.
-- [ ] G.4 — `scratchpad.md` rewritten for V1.1 → V2 handoff.
-- [ ] G.5 — `CLAUDE.md` §2 marker → "none — V1.1 shipped"; M14
-      row → ✅.
+- [x] G.1 — `docs/release-notes/v1.1.md` drafted: five household-friendly
+      sections (Save your account, Quantity & notes, Multiple lists,
+      Staples & Finish shopping, Shopping history) + how-to-update note.
+      M13 (Sentry) intentionally omitted — invisible to end users.
+      _(2026-05-24)_
+- [x] G.2 — Supabase project under free-tier limits (DB < 500 MB,
+      MAU < 50K, realtime conn < 200). _(2026-05-24)_
+- [x] G.3 — Vercel production deploy green on `4bc10a0`
+      (seams-removed). _(2026-05-24)_
+- [x] G.4 — `scratchpad.md` rewritten for V1.1 → V2 handoff.
+      _(2026-05-24)_
+- [x] G.5 — `CLAUDE.md` §2 marker → "none — V1.1 shipped; V2 up
+      next"; M14 row → ✅. _(2026-05-24)_
 
 ---
 
@@ -254,7 +227,7 @@ _(empty at start)_
 
 ## 7. Sign-off
 
-- [ ] All P0/P1 boxes ticked or rejected with rationale.
-- [ ] All P2/P3 items either fixed or logged as follow-ups.
-- [ ] Release note drafted.
-- [ ] Memory + scratchpad close-out commit pushed.
+- [x] All P0/P1 boxes ticked or rejected with rationale. _(none found)_
+- [x] All P2/P3 items either fixed or logged as follow-ups. _(none found)_
+- [x] Release note drafted. _(`docs/release-notes/v1.1.md`)_
+- [x] Memory + scratchpad close-out commit pushed.
