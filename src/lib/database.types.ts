@@ -34,6 +34,100 @@ export type Database = {
   }
   public: {
     Tables: {
+      category_overrides: {
+        Row: {
+          category: string
+          created_at: string
+          normalised_name: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          normalised_name: string
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          normalised_name?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      category_request_counters: {
+        Row: {
+          cache_hits: number
+          cache_misses: number
+          count: number
+          day: string
+          household_id: string
+          updated_at: string
+        }
+        Insert: {
+          cache_hits?: number
+          cache_misses?: number
+          count?: number
+          day: string
+          household_id: string
+          updated_at?: string
+        }
+        Update: {
+          cache_hits?: number
+          cache_misses?: number
+          count?: number
+          day?: string
+          household_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_request_counters_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_category_overrides: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          household_id: string
+          normalised_name: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          normalised_name: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          normalised_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_category_overrides_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       household_members: {
         Row: {
           display_name: string | null
@@ -98,6 +192,7 @@ export type Database = {
           added_by: string | null
           added_by_name: string | null
           category: string
+          category_pending: boolean
           checked_at: string | null
           checked_by: string | null
           created_at: string
@@ -117,6 +212,7 @@ export type Database = {
           added_by?: string | null
           added_by_name?: string | null
           category?: string
+          category_pending?: boolean
           checked_at?: string | null
           checked_by?: string | null
           created_at?: string
@@ -136,6 +232,7 @@ export type Database = {
           added_by?: string | null
           added_by_name?: string | null
           category?: string
+          category_pending?: boolean
           checked_at?: string | null
           checked_by?: string | null
           created_at?: string
