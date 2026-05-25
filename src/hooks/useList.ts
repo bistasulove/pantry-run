@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef } from 'react'
 
 import { categorizeRemote, detectCategoryKeyword, FALLBACK_CATEGORY } from '@/lib/categories'
+import { normaliseName } from '@/lib/category-overrides'
 import { loadListSnapshot, saveListSnapshot } from '@/lib/offline/cache'
 import { runQueuedOp } from '@/lib/offline/executor'
 import { enqueue, peekHead, queueLength, removeHead, type QueuedOp } from '@/lib/offline/queue'
 import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/lib/database.types'
+import { useCategoryOverridesStore } from '@/store/categoryOverridesStore'
 import { useHouseholdStore } from '@/store/householdStore'
 import { useListStore, type ListItem } from '@/store/listStore'
 import { useSyncStore } from '@/store/syncStore'
@@ -356,7 +358,18 @@ export function useList(): UseListApi {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const handleOnline = () => {
-      void drainQueue()
+      // After drain, also kick the pending-category sweep. The SUBSCRIBED
+      // re-subscribe path already triggers it via fetchAndReconcile, but on
+      // brief network blips the realtime socket may not have disconnected,
+      // so SUBSCRIBED never re-fires. Without this fallback, items added
+      // offline stay stuck on 'Other' until the next visibilitychange.
+      void drainQueue(() => {
+        const houseId = useHouseholdStore.getState().householdId
+        const currentListId = useHouseholdStore.getState().activeListId
+        if (houseId && currentListId) {
+          void sweepPendingCategories(currentListId, houseId)
+        }
+      })
     }
     window.addEventListener('online', handleOnline)
     return () => window.removeEventListener('online', handleOnline)
@@ -372,12 +385,17 @@ export function useList(): UseListApi {
       const now = new Date().toISOString()
       const maxSort = itemsRef.current.reduce((acc, i) => Math.max(acc, i.sort_order), 0)
 
-      // M15 two-tier: keyword first (sync, offline). A miss flags the row as
-      // category_pending so the reconnect sweep (or the inline fire-and-forget
-      // below) can repair it later. We default the displayed category to
-      // 'Other' on a miss so the item shows up immediately under a known
-      // section rather than disappearing into limbo.
-      const keywordHit = detectCategoryKeyword(name)
+      // M15 three-tier sync resolution (in priority order):
+      //   1. Household override — user's prior manual correction wins over
+      //      everything, including the keyword dictionary. Mirrored locally
+      //      by CategoryOverridesRealtime so this is sync + offline-safe.
+      //   2. Keyword dictionary — fast, offline, covers the long tail.
+      //   3. Remote — keyword miss + online → Edge Function (which does its
+      //      own household + global cache + LLM tier).
+      const normalised = normaliseName(name)
+      const overrideHit =
+        useCategoryOverridesStore.getState().byNormalisedName.get(normalised) ?? null
+      const keywordHit = overrideHit ?? detectCategoryKeyword(name)
       const initialCategory = keywordHit ?? FALLBACK_CATEGORY
       const needsRemote = keywordHit === null
       const householdId = useHouseholdStore.getState().householdId

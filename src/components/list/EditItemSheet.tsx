@@ -10,8 +10,9 @@ import { Sheet } from '@/components/ui/Sheet'
 import { useHousehold } from '@/hooks/useHousehold'
 import { useSession } from '@/hooks/useSession'
 import { CATEGORY_ORDER } from '@/lib/categories'
-import { upsertHouseholdOverride } from '@/lib/category-overrides'
+import { normaliseName, upsertHouseholdOverride } from '@/lib/category-overrides'
 import { isUnitKey, type UnitKey } from '@/lib/units'
+import { useCategoryOverridesStore } from '@/store/categoryOverridesStore'
 import { useHouseholdStore } from '@/store/householdStore'
 import type { ListItem } from '@/store/listStore'
 
@@ -141,12 +142,12 @@ export function EditItemSheet({
       if (categoryChanged) {
         const householdId = useHouseholdStore.getState().householdId
         if (householdId) {
-          const result = await upsertHouseholdOverride(
-            householdId,
-            trimmedName.length > 0 ? trimmedName : item.name,
-            category,
-            userId,
-          )
+          const writeName = trimmedName.length > 0 ? trimmedName : item.name
+          // Apply locally first so the next add of the same name picks up
+          // the override even if the realtime echo from the upsert below
+          // hasn't arrived yet.
+          useCategoryOverridesStore.getState().apply(normaliseName(writeName), category)
+          const result = await upsertHouseholdOverride(householdId, writeName, category, userId)
           if (!result.ok) {
             console.warn('[EditItemSheet] override write failed', result.error)
           }

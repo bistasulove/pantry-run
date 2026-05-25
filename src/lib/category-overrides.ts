@@ -14,7 +14,10 @@
 
 import { createClient } from '@/lib/supabase/client'
 
-function normalise(name: string): string {
+// Mirror of the Edge Function's normaliser. Both must stay identical or
+// reads/writes against category_overrides + household_category_overrides
+// will silently miss each other on different whitespace/case variants.
+export function normaliseName(name: string): string {
   return name.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
@@ -24,7 +27,7 @@ export async function upsertHouseholdOverride(
   category: string,
   userId: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const normalised = normalise(itemName)
+  const normalised = normaliseName(itemName)
   if (normalised.length === 0 || normalised.length > 200) {
     return { ok: false, error: 'Invalid item name' }
   }
