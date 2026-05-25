@@ -577,6 +577,73 @@ Used while the list loads on first open or reconnect. Never show a spinner — s
 - Animation: 1.5s shimmer sweep, loops until content loads
 - Show 5–6 skeleton items to fill the screen
 
+### 7.16 Segmented Control _(V2 stub)_
+
+Two-way (or N-way) switch used inside `/plan` to toggle between Reminders and Tasks views.
+
+```
+┌──────────────────────────┐
+│  Reminders  │   Tasks    │
+└──────────────────────────┘
+```
+
+- **Owning milestone:** M17 (first V2 milestone to add a tab)
+- **Used by:** M17 (Reminders / Tasks split inside `/plan`), M18, future
+- **Locked basics:** sits below Header, above the active view content. Active segment uses Primary accent text; inactive uses Text Secondary. Underline indicator slides between segments (250ms `ease-out-expo`). Full segment tap target meets 44px minimum.
+- **Spec at M17 kickoff:** exact heights, border treatment, dark-mode variant, reduced-motion fallback.
+
+### 7.17 Filter Chip _(V2 stub)_
+
+Horizontally-scrolling row of single-select pills used inside `/tasks` to filter views.
+
+```
+[ All ]  [ Mine ]  [ Unassigned ]  [ Overdue ]
+```
+
+- **Owning milestone:** M18
+- **Used by:** M18, future (history filters, activity filters)
+- **Locked basics:** single-select within row. Active chip uses Primary accent background + Text Inverse; inactive uses Background Surface + Text Secondary + 1px border. 32px tall, 12px horizontal padding, 8px gap between chips. Touch target inflated to 44px via invisible padding.
+- **Spec at M18 kickoff:** scroll behaviour at narrow widths, optional count badge (e.g. "Overdue · 3"), dark-mode variant.
+
+### 7.18 Header Bell + Badge _(V2 stub)_
+
+Notification entry point on the Header right side. Tap opens the Activity sheet.
+
+```
+🔔 (3)
+```
+
+- **Owning milestone:** M19
+- **Used by:** M19 (Activity unseen-count)
+- **Locked basics:** Lucide `Bell` icon, `size={20}`, `strokeWidth={1.5}`. Badge is a small filled pill, top-right of the icon, Primary accent background + Text Inverse, `caption` size. Count caps at "9+". `aria-label="Activity (N unseen)"`. Tap target meets 44px minimum.
+- **Spec at M19 kickoff:** badge animation on increment, dark-mode variant, no-unseen state (badge hidden vs. greyed).
+
+### 7.19 Avatar Menu Chip _(V2 stub)_
+
+Identity chip on the Header right side. Tap opens the More sheet (Household, Settings, Notifications, Sign out).
+
+```
+( SR )
+```
+
+- **Owning milestone:** M17 (BottomNav refactor lands with M17 as the first V2 tab change)
+- **Used by:** all V2 navigation
+- **Locked basics:** circular chip, 36px diameter, household-derived initials (first letter of the current user's display name, or "?" if unset). Background uses a deterministic muted accent derived from `user.id`. `aria-label="Open menu"`. Tap target meets 44px.
+- **Spec at M17 kickoff:** colour derivation algorithm, fallback when no display name, dark-mode variant, focus ring.
+
+### 7.20 Suggestion Chip Row _(V2 stub)_
+
+Subtle one-line affordance above the AddItemBar on `/list`, surfacing items the household usually buys.
+
+```
+You usually buy: Milk · Bread · Eggs                ✕
+```
+
+- **Owning milestone:** M19
+- **Used by:** M19
+- **Locked basics:** single line of `body-sm` text in Text Secondary. Inline item names are tap targets (each pads to 44px height via invisible padding). `✕` dismisses for 14 days. **Not** a banner; sits in its own slot above the AddItemBar, below list content. Collapses with the keyboard via Visual Viewport API.
+- **Spec at M19 kickoff:** truncation rules (show up to N names, "+M more" overflow), dark-mode variant, max-line-length on tablet widths, "Make X a staple?" copy variant when frequency is ≥ 4 trips in 90 days.
+
 ---
 
 ## 8. Iconography

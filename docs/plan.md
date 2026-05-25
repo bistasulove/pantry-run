@@ -798,6 +798,278 @@ Mirrors M7 for V1.1 — real-device sweep, Lighthouse audit, cross-browser. Plus
 
 ---
 
+## 11.6. V2 Milestone Breakdown
+
+V1.1 shipped 2026-05-24. The userbase has since grown to ~25 active households whose post-V1.1 feedback reshaped V2 substantially. The original V2 outline in §12 (push notifications, activity feed, smart suggestions, begin React Native port) survives in spirit but is reordered and reweighted; the native port slips to V3.
+
+Five recurring pieces of feedback drove the reshape:
+
+| #   | Signal                                                    | Strength                                                 | V2 fit              |
+| --- | --------------------------------------------------------- | -------------------------------------------------------- | ------------------- |
+| 1   | Household reminders (bin day, rent day, recurring)        | Strong — recurring across users                          | Headline (M17)      |
+| 2   | Budget tracking                                           | Weak — 2 vague mentions                                  | Defer to V4 (§12)   |
+| 3   | "Most items show as Other"                                | Strong — quality bug                                     | Fold in early (M15) |
+| 4   | Cross-store price comparison                              | Weak — 1 user, very optimistic                           | Defer indefinitely  |
+| 5   | Household todos / chores (mow lawn, plumbing, deep clean) | Strong — users already hacking a "Todos" list workaround | Headline (M18)      |
+
+The three strong signals (1, 3, 5) all point in the same direction: users want Pantry Run to be a **household coordination** app, not just a shopping list. The "Todos" workaround (#5) is the loudest signal — users are already paying a usability cost to keep using the app for adjacent jobs. #2 and #4 are explicitly deferred (see the closing notes).
+
+V2 has six milestones, themed **Household Coordination**. Each is independently deployable except M17 and M18, which require M16. M15 ships first because it's the lowest-risk, highest-satisfaction win and unblocks nothing else.
+
+---
+
+### 11.6.1 V2 UI & Navigation Strategy
+
+V2 introduces three new feature surfaces (Reminders, Tasks, Activity). Naively mapping each to a BottomNav tab would push the tab count from 4 to 7 — a clutter regression the design philosophy ("Invisible Design" — `docs/design_document_guidelines.md` §1.1; reference apps Things 3, Linear, Notion) does not survive. This subsection locks the UI strategy before code starts so M17–M19 implement to a shared frame.
+
+**BottomNav (4 tabs, unchanged count):**
+
+| Tab     | Icon     | Content                                                        |
+| ------- | -------- | -------------------------------------------------------------- |
+| List    | Home     | Unchanged — shopping list, primary surface                     |
+| Plan    | Calendar | M17 Reminders + M18 Tasks behind an internal segmented control |
+| History | Clock    | Unchanged — M12 shopping history                               |
+| More    | Avatar   | Sheet with Household, Settings, Notifications, Sign out        |
+
+Activity (M19) is **not** a BottomNav tab. It becomes a Bell button in the Header with an unseen-count badge; tap opens an Activity sheet (overlay, not a full route). Rationale: activity is passive consumption — sheet pattern fits, and matches Slack / GitHub / Linear conventions where the notification surface lives in the Header, not the tab bar.
+
+**Plan tab — unified UI, split data:**
+
+The §11.6 M17 "Decisions to ratify" lean is **split** at the data layer (separate `reminders` and `tasks` tables, separate primitives). The UI gives them one home because the user's mental model is "things to do, scheduled or not." A segmented control inside `/plan` toggles between Reminders and Tasks views. Each view retains its full feature surface from M17 / M18 — only the BottomNav slot is unified.
+
+**Header (new right side):**
+
+- Household name + list switcher (left) — unchanged
+- Bell button with unseen-activity badge (M19) — new
+- Avatar chip — opens the More sheet (consolidates Household + Settings + Notifications + Sign out)
+
+Both Bell and Avatar follow the 44px tap-target rule (CLAUDE.md §17). The bell badge is a small pill showing count (capped at "9+"), positioned top-right of the icon per the new design-system entry.
+
+**`/list` page on-page hierarchy (single banner slot):**
+
+At most **one** system banner is rendered at a time on `/list`. Priority order, highest first:
+
+1. Offline indicator (sync state) — always wins when active
+2. Missing-name banner (M3.5)
+3. Install banner (M6)
+4. Save-your-account banner (M9 — 7-day re-show)
+5. Staple-hint toast (M11 — first staple-toggle only)
+
+Smart suggestions chip row (M19) is **not** a banner — it lives above AddItemBar, below the list content, as a single text-line affordance (no chip backgrounds; `text-text-secondary` with inline action labels). Only rendered when signal is real (≥3 trips) and not dismissed. Collapses with the existing Visual Viewport keyboard handler.
+
+**New design-system entries (`docs/design_document_guidelines.md` §7):**
+
+Stub entries added now at V2 kickoff. Full visual specs filled in at the relevant Mx kickoff.
+
+| Component           | Stub  | Owning milestone         | Used by  |
+| ------------------- | ----- | ------------------------ | -------- |
+| Segmented control   | §7.16 | M17 (Plan tab)           | M17, M18 |
+| Filter chip         | §7.17 | M18 (Tasks filter)       | M18      |
+| Header bell + badge | §7.18 | M19                      | M19      |
+| Avatar menu chip    | §7.19 | M17 (BottomNav refactor) | All V2   |
+| Suggestion chip row | §7.20 | M19                      | M19      |
+
+**BottomNav migration:**
+
+The 4-tab → 4-tab restructure lands as part of M17 (the first V2 milestone that adds a tab). Tab map change: Household and Settings move out of BottomNav into the Avatar menu sheet; Plan slot replaces Household position; Avatar slot replaces Settings position. No tab disappears entirely. Existing deep-links to `/household` and `/settings` continue to work — they're just reached via the Avatar menu now.
+
+**What this does _not_ solve (accepted tradeoffs):**
+
+- The Plan tab's segmented control adds one indirection vs. a hypothetical dedicated Reminders or Tasks tab. Acceptable: the segmented control is one tap, both views share the same `/plan` shell, and the trade buys us a clean tab count.
+- The Activity sheet means users can't deep-link to a specific activity item from outside the app. Acceptable: activity items aren't durable references. Push notifications for reminders or tasks deep-link directly to `/reminders?focus=X` or `/tasks?focus=X`, not to the activity sheet.
+
+---
+
+### M15 — Smarter Categories
+
+**~4–5 days**
+
+The "most items show as Other" complaint is the loudest quality bug from V1.1. The current `src/lib/categories.ts` is a hand-curated keyword dictionary (~300 lines) that covers grocery basics but fails on long-tail items ("boba pearls", "haldi", "tahini"). This milestone makes detection smarter without breaking the offline-first model for cached items.
+
+**Deliverables:**
+
+- **Schema:** new `category_overrides` table — `normalised_name` (text, PRIMARY KEY — lowercased, whitespace-collapsed), `category` (text, must be in `CATEGORY_ORDER`), `source` (text: `'llm'` | `'keyword'`), `created_at`. Global cache shared across all households for cost amortisation. New `household_category_overrides` table — same shape plus `household_id` — for per-household user corrections (a household that rejects the LLM's call for "boba pearls" doesn't have to re-correct on every add).
+- **RLS:** `category_overrides` is public-read; writes via Edge Function only. `household_category_overrides` is full-CRUD for household members.
+- **New Edge Function `categorize_item`:** input `{ name }`, output `{ category, source }`. Algorithm: normalise → check household override → check global cache → call Claude Haiku with a constrained prompt that returns one of the 9 non-Other categories → write to global cache → return. Rate-limit by `household_id` (e.g. 100 calls/day) with graceful "Other" fallback on cap. Anthropic API key in `ANTHROPIC_API_KEY` (server-only).
+- **Frontend integration:** `detectCategory(name)` becomes async. Algorithm: keyword match first (sync, offline) → if hit, return; → if miss and online, call Edge Function; → if miss and offline, return `'Other'` and tag the item with `category_pending=true` (new optional column on `list_items`) for opportunistic re-categorisation on reconnect.
+- **User override UI:** category picker in the item edit sheet. User pick writes to `household_category_overrides` and updates the item. User picks always beat LLM picks.
+- **Keyword dictionary expansion (opportunistic):** expand `CATEGORY_ORDER` to add **Snacks** and **Condiments & Sauces** — the two most common "Other" buckets observed in V1.1 trips. Decision to ratify at kickoff: expand further (Baby, Pet) or rely on the LLM for those long tails.
+- **Cost guardrails:** Edge Function logs per-call cost to Sentry breadcrumbs; daily aggregate metric so we notice if a household triggers cache misses repeatedly.
+- **Settings:** "About" section gains a one-line "Smarter categories" explainer noting cache-based behaviour and online requirement for unknown items.
+
+**Decisions to ratify at kickoff:**
+
+- Whether per-household overrides also feed back into the global cache (privacy: are item names PII? Lean: no, but worth an explicit ack).
+- Whether the LLM-call seam is Anthropic SDK direct in the Edge Function vs. a thin wrapper for future provider portability.
+
+**Done when:** Adding "boba pearls" to a list categorises it as Pantry (or another sensible category) within 1s when online. The next household to add "boba pearls" sees the category instantly via the global cache (no LLM call). Offline-added items fall back to "Other" with non-blocking re-categorisation on reconnect. A user can manually correct a category and the correction sticks household-wide.
+
+---
+
+### M16 — Push Notifications Infrastructure
+
+**~3–4 days**
+
+Unblocks M17 (reminders) and M18 (task assignment). Unsexy plumbing — VAPID keys, service worker push handler, subscription management, server-side send. No user-visible feature ships in this milestone alone except a Settings toggle and a dev-only test seam.
+
+**Deliverables:**
+
+- **VAPID key pair** generated locally and configured: `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (client) and `VAPID_PRIVATE_KEY` (server). Both added to `.env.example` and CLAUDE.md §6.
+- **Schema:** new `push_subscriptions` table — `id`, `user_id` (REFERENCES auth.users ON DELETE CASCADE), `household_id` (denormalised for fan-out queries), `endpoint` (text), `p256dh` (text), `auth` (text), `user_agent_label` (text — e.g. "iPhone Safari"), `created_at`. UNIQUE(user_id, endpoint). RLS: user can SELECT/INSERT/DELETE their own rows only.
+- **Service worker:** `public/sw.js` gains a `push` event handler that renders a notification from the payload (`{ title, body, kind, target_id, household_id }`), and a `notificationclick` handler that focuses the relevant route (`/reminders?focus=X`, `/tasks?focus=X`).
+- **`usePushNotifications` hook:** detects support (`'serviceWorker' in navigator && 'PushManager' in window`), requests permission, calls `subscribe()`, POSTs subscription to `/api/push/subscribe`. Handles `pushsubscriptionchange` and re-subscribes transparently.
+- **API routes:** `/api/push/subscribe` (POST, inserts row) and `/api/push/unsubscribe` (DELETE, removes row). Auth required.
+- **Server-side helper `lib/push/send.ts`:** wraps the `web-push` library. Exposes `sendToUser(userId, payload)` and `sendToHousehold(householdId, payload)`. Reused by M17 reminder cron and M18 task-assignment flow.
+- **Settings → Notifications section:** status (enabled / disabled / unsupported), enable/disable toggle, list of registered devices with a Remove button each. Unsupported-client fallback message lists the requirements (iOS 16.4+ installed PWA; Android Chrome / desktop Chrome / Firefox / Edge / Safari work natively).
+- **Dev seam:** `/api/push/test` (gated by `NODE_ENV !== 'production'`) fires a sample notification to the current user. Removed at M20 close-out per the M13/M14 seam-and-remove pattern.
+
+**Decisions to ratify at kickoff:**
+
+- Whether to denormalise `household_id` onto `push_subscriptions` (lean: yes — saves a join per fan-out) or compute via `household_members` at send time.
+- Whether expired-subscription cleanup (`web-push` returns 404/410) runs inline on the next send or via a separate sweep job.
+
+**Done when:** A user with an installed PWA on a supported platform can enable notifications in Settings, see their device listed, and receive a test notification via the dev seam. Disabling removes the row server-side. iOS <16.4 / non-installed PWA shows the fallback message with no enable button.
+
+---
+
+### M17 — Household Reminders
+
+**~5–6 days**
+
+The largest V2 milestone — new primitive, new schema, new UI surface, server-side scheduling, push delivery, recurrence rules. Most-asked V2 feature ("every Thursday is bin day, every Monday is rent day").
+
+**Deliverables:**
+
+- **Schema:**
+  - `reminders` — `id`, `household_id`, `title` (text, required), `notes` (text, optional), `recurrence` (text, subset of RRULE — see below), `next_fire_at` (timestamptz), `lead_minutes` (integer, default 0 — e.g. 60 for "1 hour before"), `assignee_id` (user_id, nullable — null = whole household), `created_by`, `created_at`, `updated_at`, `is_active` (boolean default true).
+  - `reminder_fires` — append-only log: `id`, `reminder_id`, `fired_at`, `delivery_status` (text: `'sent'` | `'failed'` | `'no_subscriptions'`).
+- **Recurrence encoding:** subset of RRULE stored as free text (e.g. `FREQ=WEEKLY;BYDAY=TH;INTERVAL=1`). Forward-compatible with future rules, but the V2 UI only exposes a fixed preset list: Daily, Weekly on day(s) of week, Monthly on the Nth, Yearly on a date. Custom RRULE input deferred to V2.1.
+- **RLS:** household members can full-CRUD reminders in their household. `reminder_fires` is SELECT-only.
+- **Server-side scheduler:** Supabase `pg_cron` job runs every 1 minute, calling a `SECURITY DEFINER` function `fire_due_reminders()`. The function selects active reminders with `next_fire_at <= now()`, advances `next_fire_at` per the recurrence rule, inserts a `reminder_fires` row, and triggers push delivery (via `pg_net` to `/api/push/send-reminder` or a direct Edge Function call). All in one transaction per reminder.
+- **Timezone handling:** new `timezone` column on `households` (text, default `'Australia/Sydney'`, settable in household settings). Recurrence presets are computed in household timezone (so "every Thursday" means Thursday in your timezone, not UTC). `next_fire_at` stored as UTC.
+- **New `/reminders` route under `(app)/`:** list view grouped by Today / This week / Later. Empty state with two example presets ("Bin night — every Thursday", "Rent — every 1st of the month") that pre-fill the create sheet.
+- **Bottom-sheet create/edit:** title, recurrence preset picker with a live "Next 3 fires:" preview, optional notes, optional assignee, lead-minutes preset (on time / 15 min / 1 hour / 1 day before).
+- **BottomNav:** new Bell tab. Badge count = reminders due today (locally computed from cached reminders, no extra query).
+- **Realtime:** household-scoped channel on `reminders` table — edits propagate live.
+- **Push payload:** `{ kind: 'reminder', reminder_id, title, household_id }`. Notification click deep-links to `/reminders?focus=<id>`.
+- **Onboarding:** first time a household member enters `/reminders`, show a one-time empty-state explainer with the two example presets.
+
+**Decisions to ratify at kickoff:**
+
+- Whether tasks and reminders share a single `events` table with a discriminator column or live as separate tables. Lean: **separate** — the data shapes diverge (recurrence vs. completion) and the schema savings don't outweigh the UX clarity cost. Pressure-test at kickoff.
+- Whether `fire_due_reminders()` calls push send directly (via `pg_net`) or enqueues a job that an Edge Function drains. Lean: direct — fewer moving parts, acceptable at V2 scale.
+
+**Edge cases for QA (M20):** reminder edited mid-fire (row lock), assignee removed from household (fall back to whole household), reminder with `next_fire_at` in the past (fires once on next cron tick then advances), DST transitions (Thursday at 7pm local survives DST shift).
+
+**Done when:** A household member can create "Bin night — every Thursday at 7pm, 1 hour lead". At 6pm every Thursday, all household members with push enabled receive a notification. Tapping it opens the reminder. Editing recurrence to "every other Thursday" updates `next_fire_at` correctly. Deleting the reminder stops it firing.
+
+---
+
+### M18 — Household Tasks
+
+**~4–5 days**
+
+Migrates users off the "Todos" list workaround. Similar shape to reminders but no scheduler — tasks are completion-tracked, not fire-and-forget.
+
+**Deliverables:**
+
+- **Schema:**
+  - `tasks` — `id`, `household_id`, `title`, `notes` (optional), `assignee_id` (user_id, nullable), `due_date` (date, nullable — date-only, no time), `is_completed` (boolean default false), `completed_at` (timestamptz, nullable), `completed_by` (user_id, nullable), `created_by`, `created_at`, `updated_at`.
+  - No recurrence column — recurring tasks deferred to V2.1. A truly scheduled chore ("water plants every Monday") fits the reminder primitive (M17) better.
+- **RLS:** household members can full-CRUD tasks in their household.
+- **New `/tasks` route under `(app)/`:** default view = Open tasks (sorted by due date asc, undated last), then Completed (collapsed, last 30 days). Filter chips: All / Mine / Unassigned / Overdue.
+- **Bottom-sheet create/edit:** title, notes, due date picker (optional), assignee picker (optional, defaults to creator).
+- **BottomNav:** new Tasks tab. Badge count = open tasks assigned to current user.
+- **Realtime:** household-scoped channel on `tasks` table.
+- **Push integration (via M16):** when a task is assigned to a user (on create or reassign), send push to that user's subscriptions. Payload: `{ kind: 'task', task_id, title, household_id }`. Body: `"<actor> assigned: <title>"`. Notification deep-links to `/tasks?focus=<id>`.
+- **Offline support:** create / complete / edit / delete all queueable via existing `useOfflineQueue` (M5). New queue kinds: `task.create`, `task.update`, `task.delete`.
+- **Settings:** Notifications → "Task assignments" toggle (default on).
+
+> **Note on "Todos" list migration.** Only one V1.1 household used a list named "Todos" as a chore workaround. Handled manually by the developer (offline conversation, one-time data move) rather than building in-app migration UX. Revisit if V2 surfaces additional households using the pattern.
+
+**Decisions to ratify at kickoff:**
+
+- Whether to log a `task_activity` row on each state change now or defer until M19. Lean: defer — M19 will need to emit these events anyway; building the log table once is cleaner.
+
+**Edge cases for QA (M20):** assignee leaves household (shown as "Unassigned (former member)" per M3.5 snapshot pattern), task completed while offline (queued, syncs on reconnect), bulk-complete (multi-select chip).
+
+**Done when:** A household member can create "Mow the lawn" with a due date and assign it to a member. The assignee receives a push notification. They can mark it complete from `/tasks` or via the notification action. The list shows it under Completed with the completion timestamp and the marker's name.
+
+---
+
+### M19 — Activity Feed + Smart Suggestions
+
+**~4–5 days**
+
+The original V2 features from §12. Lower priority than reminders/tasks (no direct user demand) but high payoff once those primitives exist — both feed off the data they produce.
+
+**Deliverables:**
+
+- **Activity feed schema:** new `household_activity` table — `id`, `household_id`, `actor_id`, `actor_name_snapshot` (text), `kind` (text: `'item_added'` | `'item_checked'` | `'trip_finished'` | `'reminder_fired'` | `'task_completed'` | `'task_assigned'` | `'member_joined'`), `target_id` (text, polymorphic), `target_label_snapshot` (text — item name, reminder title, etc.), `created_at`. Append-only. RLS: household members SELECT only.
+- **Activity writers:** `AFTER` triggers on `list_items`, `shopping_trips`, `reminder_fires`, `tasks`, `household_members` to insert activity rows. Decision at kickoff: triggers vs. application-side writes (lean: triggers — single source of truth, can't be forgotten).
+- **New `/activity` route under `(app)/`:** reverse chronological feed, grouped by day. Cursor pagination (PAGE_SIZE=30) per the M12 history pattern. Realtime INSERT subscription for live updates.
+- **Self-mute setting:** Settings → Activity → "Hide my own actions" toggle (default ON — most users don't want their own activity in the feed). Kickoff decision: keep the toggle vs. always hide self-actions.
+- **Smart suggestions:** new `useSmartSuggestions` hook queries `shopping_trip_items` for the household over the last 90 days, computes per-item frequency, surfaces items appearing in ≥ 3 trips that aren't currently on the active list.
+- **Suggestions UI:** passive chip row above the add-item bar — "You usually buy: Milk · Bread · Eggs". Tap a chip → add. × → dismiss for 14 days (per-user localStorage, no server state).
+- **"Make it a staple" upsell:** when a non-recurring item has been added in ≥ 4 trips in 90 days, the chip copy switches to "Make Milk a staple?" → tap calls the existing M11 `is_recurring=true` mutation. Reuses existing flow, no new mutation.
+- **BottomNav:** Activity tab badge = unseen activity rows since last `/activity` open (per-user timestamp in localStorage).
+
+**Done when:** Opening `/activity` shows a reverse-chronological feed of household actions across the last week. Adding a new item triggers a new activity row visible to other members in realtime. On `/list`, a household with ≥ 4 shopping trips sees a "You usually buy: …" chip row above the input bar; tapping adds the item.
+
+---
+
+### M20 — QA, Edge Cases & V2 Launch
+
+**~3–4 days**
+
+Mirrors M14 for V2 — real-device sweep, Lighthouse audit, cross-browser, V2-specific edge cases. Larger surface than M14 because V2 introduces three new tabs (Reminders, Tasks, Activity) and one new piece of infrastructure (push).
+
+**Deliverables:**
+
+- Full happy-path on real devices across the new flows: smarter categories (online + offline + override) → enable push notifications → create + receive a reminder → create + assign + complete a task → view activity → accept + dismiss a smart suggestion.
+- V2-specific edge cases:
+  - Push permission denied or revoked mid-session — UI reflects state; orphan server subscription cleaned up on next send (410/404 sweep).
+  - Recurring reminder fires while every device is offline — notification arrives on next device reconnect (best effort; document Web Push retention per browser).
+  - Reminder created with `next_fire_at` in the past — fires once on next cron tick, then advances.
+  - DST transition — Thursday reminder still fires Thursday in household timezone.
+  - Task assignee leaves household — shown as former member, task reassignable.
+  - Smart-category Edge Function rate-limit hit — graceful "Other" fallback, no error UX.
+  - Activity feed for households with no actions yet — empty state.
+  - Smart suggestion dismissed — does not reappear for 14 days.
+- Lighthouse audit on V2 routes (`/list`, `/reminders`, `/tasks`, `/activity`): Performance ≥ 85, Accessibility ≥ 90, Best Practices ≥ 90, PWA ✓.
+- Cross-browser sweep: Chrome (Android), Safari (iOS 16.4+ installed PWA), Chrome (desktop), Safari (desktop), Firefox (desktop). Push-notification delivery tested explicitly on each.
+- Sentry confirmed receiving events for: reminder cron failures (server-side), push send failures (transient 410/404), Edge Function categorisation failures and rate-limit hits.
+- `docs/release-notes/v2.md` drafted per the M14 pattern. Six household-friendly sections (Smarter categories, Notifications, Reminders, Tasks, Activity, Smart suggestions) plus a "We heard you" section calling out each piece of post-V1.1 feedback and where it landed.
+- `docs/m20_test_plan.md` written at kickoff per the M14 pattern.
+- Dev seams removed: the M16 `/api/push/test` route deleted in M20 close-out.
+
+**Done when:** All ≥ 25 V1.1 households have been notified of V2 via `docs/release-notes/v2.md`. Reminders and tasks tested end-to-end by ≥ 3 households. Push notification successfully delivered on at least one Android and one iOS installed PWA. No P0/P1 bugs open.
+
+---
+
+### M15–M20 Summary
+
+| Milestone | Focus                             | Est. Days | Cumulative |
+| --------- | --------------------------------- | --------- | ---------- |
+| M15       | Smarter Categories                | 4–5       | 5          |
+| M16       | Push Notifications Infrastructure | 3–4       | 9          |
+| M17       | Household Reminders               | 5–6       | 15         |
+| M18       | Household Tasks                   | 4–5       | 20         |
+| M19       | Activity Feed + Smart Suggestions | 4–5       | 25         |
+| M20       | QA, Edge Cases & V2 Launch        | 3–4       | 29         |
+
+**Total: ~5–6 weeks** working evenings and weekends as a solo developer. Larger than V1.1 (~3–4 weeks) because V2 introduces three new tabs plus push infrastructure.
+
+> **Note on positioning.** If V2 ships, "Pantry Run" undersells the product — the app becomes a household coordination tool with shopping as the flagship feature. Renaming is a meaningful decision (icon, manifest, domain, App Store strategy when V3 ships native). Decide at M17 / M18 kickoff when the new primitives are concrete, not now.
+
+> **Note on native port deferral.** The original §12 V2 line included "Begin React Native port (Expo)". With M15–M20 already a full V2 surface area, and iOS Web Push working for installed PWAs since 16.4 (covers most of the current ~25-household audience), the native port slips to V3 alongside monetisation. Lets the V2 value prop be validated on PWA before paying the native cost.
+
+> **Note on deferred feedback.** Budget tracking (feedback #2) already sits in V4 (§12) — revisit at V3 kickoff once monetisation is live. Cross-store price comparison (feedback #4) is not scoped — requires either user-supplied price entry (unlikely to be sustained) or third-party price APIs per store (commercial agreements). Revisit only if multiple V2 users ask.
+
+> **Note on V2.1 candidates.** Custom RRULE input (M17), recurring tasks (M18), and a richer activity feed with filter/search (M19) are all natural V2.1 follow-ups. Defer until V2 ships and post-V2 feedback surfaces what's actually missing.
+
+---
+
 ## 12. Incremental Upgrade Roadmap
 
 ```
@@ -814,19 +1086,20 @@ V1.1 — Continuity & Trust (Weeks 7–10)
   └── Shopping history (view + restore items from past trips)
   └── Sentry — error tracking + source-map upload (deferred from M7)
 
-V2 — PWA + Begin Native Prep (Months 4–6)
-  └── Push notifications (Android PWA + iOS 16.4+ PWA, full coverage in native)
-  └── Activity feed ("who added/checked what, when")
-  └── Smart suggestions (auto-detect recurring patterns from trip history)
-  └── Begin React Native port (Expo) — same Supabase backend, shared logic
-  └── Internal TestFlight / EAS build for early testers
+V2 — Household Coordination (Months 4–6)  -- reshaped from post-V1.1 feedback; see §11.6
+  └── Smarter category detection (LLM-cached for unknown items)
+  └── Push notifications infrastructure (Web Push for installed PWAs)
+  └── Household reminders (bin day, rent day — scheduled + push)
+  └── Household tasks / chores (mow lawn, plumbing — tracked completion)
+  └── Activity feed + smart suggestions (deferred from original V2 list)
+  └── Native port deferred to V3 — validate household-coordination value prop on PWA first
 
 V3 — Native App + Monetisation (Months 7–12)
+  └── React Native (Expo) port — same Supabase backend, shared logic
   └── Ship to App Store (Apple $99/yr) and Google Play ($25 one-time)
   └── RevenueCat integration for subscription management
   └── Free tier (ads via AdMob) + Pro tier (ad-free + premium features)
   └── Meal planner → auto-generates grocery list
-  └── Household chores / task assignment
 
 V4 — Household Platform (Year 2)
   └── Shopping budget tracking
