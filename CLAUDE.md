@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — V1.1 shipped; V2 scoped in plan.md §11.6, awaiting M15 kickoff
+ACTIVE: none — M15 shipped; V2 continuing, awaiting M16 kickoff
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5; V2 in Section 11.6.
@@ -47,7 +47,7 @@ Update this line when starting a new milestone. V1 milestone definitions are in 
 | M13                             | Sentry & Observability                | ✅ Done    |
 | M14                             | QA, Edge Cases & V1.1 Launch          | ✅ Done    |
 | **V2 — Household Coordination** |                                       |            |
-| M15                             | Smarter Categories                    | 📋 Planned |
+| M15                             | Smarter Categories                    | ✅ Done    |
 | M16                             | Push Notifications Infrastructure     | 📋 Planned |
 | M17                             | Household Reminders                   | 📋 Planned |
 | M18                             | Household Tasks                       | 📋 Planned |
@@ -229,6 +229,13 @@ SENTRY_DSN=
 # SENTRY_ORG=
 # SENTRY_PROJECT=
 # SENTRY_AUTH_TOKEN=
+
+# Gemini — server-only, lives in Supabase secrets (M15). Powers the
+# categorize_item Edge Function. Set once via:
+#   npx supabase secrets set GEMINI_API_KEY=<your-key>
+# For local function testing, put it in supabase/functions/.env (gitignored)
+# and start the function with --env-file supabase/functions/.env.
+# GEMINI_API_KEY — never in .env.local
 ```
 
 Never commit `.env.local`. Never hardcode these values in any file.
@@ -237,7 +244,7 @@ Never commit `.env.local`. Never hardcode these values in any file.
 
 ## 7. Database Schema
 
-Six tables, all with Row Level Security (RLS) enabled.
+Nine tables, all with Row Level Security (RLS) enabled.
 
 ```sql
 households
@@ -264,23 +271,24 @@ lists
   created_at    timestamptz DEFAULT now()
 
 list_items
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
-  list_id         uuid NOT NULL REFERENCES lists(id) ON DELETE CASCADE
-  added_by        uuid REFERENCES auth.users(id) ON DELETE SET NULL
-  added_by_name   text                                        -- M3.5 snapshot for former members
-  name            text NOT NULL
-  quantity        text                                        -- legacy free-text, pre-M8 fallback
-  quantity_value  numeric(6,2)                                -- M8 canonical
-  quantity_unit   text                                        -- M8 canonical: g|kg|mL|L|piece|can|dozen
-  category        text NOT NULL DEFAULT 'Other'
-  is_checked      boolean NOT NULL DEFAULT false
-  is_recurring    boolean NOT NULL DEFAULT false              -- M11 staple flag
-  checked_by      uuid REFERENCES auth.users(id) ON DELETE SET NULL
-  checked_at      timestamptz
-  note            text
-  sort_order      integer NOT NULL DEFAULT 0
-  created_at      timestamptz DEFAULT now()
-  updated_at      timestamptz DEFAULT now()
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  list_id           uuid NOT NULL REFERENCES lists(id) ON DELETE CASCADE
+  added_by          uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  added_by_name     text                                        -- M3.5 snapshot for former members
+  name              text NOT NULL
+  quantity          text                                        -- legacy free-text, pre-M8 fallback
+  quantity_value    numeric(6,2)                                -- M8 canonical
+  quantity_unit     text                                        -- M8 canonical: g|kg|mL|L|piece|can|dozen
+  category          text NOT NULL DEFAULT 'Other'
+  category_pending  boolean NOT NULL DEFAULT false              -- M15 — true while awaiting LLM categorisation (offline keyword miss); reconnect sweep clears
+  is_checked        boolean NOT NULL DEFAULT false
+  is_recurring      boolean NOT NULL DEFAULT false              -- M11 staple flag
+  checked_by        uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  checked_at        timestamptz
+  note              text
+  sort_order        integer NOT NULL DEFAULT 0
+  created_at        timestamptz DEFAULT now()
+  updated_at        timestamptz DEFAULT now()
 
 shopping_trips                                                -- M11 append-only trip log
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid()
@@ -302,6 +310,33 @@ shopping_trip_items                                           -- M11 full snapsh
   was_recurring   boolean NOT NULL DEFAULT false
   added_by_name   text
   created_at      timestamptz DEFAULT now()
+
+category_overrides                                            -- M15 global LLM cache, shared across all households
+  normalised_name text PRIMARY KEY                            -- lowercased + whitespace-collapsed
+  category        text NOT NULL CHECK (in CATEGORY_ORDER)
+  source          text NOT NULL CHECK (in 'llm'|'keyword'|'manual')
+  created_at      timestamptz DEFAULT now()
+  updated_at      timestamptz DEFAULT now()
+
+household_category_overrides                                  -- M15 per-household manual corrections
+  household_id    uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE
+  normalised_name text NOT NULL
+  category        text NOT NULL CHECK (in CATEGORY_ORDER)
+  created_by      uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  created_at      timestamptz DEFAULT now()
+  updated_at      timestamptz DEFAULT now()
+  PRIMARY KEY (household_id, normalised_name)
+  -- AFTER INSERT/UPDATE trigger propagates non-'Other' rows to category_overrides (source='manual')
+
+category_request_counters                                     -- M15 per-day per-household LLM rate limit + observability
+  household_id    uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE
+  day             date NOT NULL
+  count           integer NOT NULL DEFAULT 0                  -- total LLM calls today (rate-limit gate: 150/day)
+  cache_hits      integer NOT NULL DEFAULT 0
+  cache_misses    integer NOT NULL DEFAULT 0
+  updated_at      timestamptz DEFAULT now()
+  PRIMARY KEY (household_id, day)
+  -- Service-role writes only, via the increment_category_counter SECURITY DEFINER RPC called from the categorize_item Edge Function
 ```
 
 **RLS rules (enforce in every migration):**
@@ -309,6 +344,9 @@ shopping_trip_items                                           -- M11 full snapsh
 - Users can only SELECT/INSERT/UPDATE/DELETE `list_items` in lists belonging to their household
 - Users can only SELECT/INSERT `household_members` for their own household
 - `shopping_trips` and `shopping_trip_items` are SELECT-only for household members; writes happen via the `finish_shopping(p_list_id)` SECURITY DEFINER RPC
+- `category_overrides` is publicly readable by authenticated users; writes only via the `categorize_item` Edge Function (service-role)
+- `household_category_overrides` is full-CRUD for household members; the propagation trigger writes through to `category_overrides`
+- `category_request_counters` is SELECT-only for household members; writes only via the `categorize_item` Edge Function (service-role) through the atomic `increment_category_counter` RPC
 - Invite codes are publicly readable for validation; all other household data requires membership
 
 **Never** query Supabase without a user session attached. Always use the client from `src/lib/supabase/client.ts` on the browser and `src/lib/supabase/server.ts` in server components.
@@ -563,27 +601,27 @@ The `useSession` hook handles all auth state. The proxy in `src/proxy.ts` protec
 
 ---
 
-## 15. Category Auto-Detection
+## 15. Category Auto-Detection (M15 — three-tier)
 
-`src/lib/categories.ts` exports a dictionary and a `detectCategory(itemName: string): string` function.
+`CATEGORY_ORDER` (in `src/lib/categories.ts`) is the single source of truth — 14 entries: Produce, Dairy, Meat, Bakery, Pantry, Frozen, Beverages, Household, Personal Care, **Snacks**, **Condiments & Sauces**, **Baby**, **Pet**, Other. The DB CHECK constraints on `category_overrides.category` and `household_category_overrides.category` enforce the same vocabulary.
 
-```typescript
-// Pattern — keyword matching, case-insensitive
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'Produce': ['apple', 'banana', 'lettuce', 'tomato', 'onion', 'garlic', ...],
-  'Dairy': ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'eggs', ...],
-  'Meat': ['chicken', 'beef', 'pork', 'lamb', 'mince', 'steak', 'sausage', ...],
-  'Bakery': ['bread', 'rolls', 'croissant', 'sourdough', ...],
-  'Pantry': ['rice', 'pasta', 'flour', 'sugar', 'oil', 'tinned', 'canned', ...],
-  'Frozen': ['frozen', 'ice cream', 'chips', ...],
-  'Beverages': ['juice', 'coffee', 'tea', 'water', 'soft drink', 'beer', 'wine', ...],
-  'Household': ['toilet paper', 'detergent', 'dishwashing', 'bin bags', ...],
-  'Personal Care': ['shampoo', 'conditioner', 'toothpaste', 'deodorant', ...],
-}
-// Default fallback: 'Other'
-```
+Resolution order in `useList.addItem` (sync first, then async fire-and-forget for keyword misses):
 
-This runs client-side — no network call. Fast, works offline.
+1. **Household override** — `useCategoryOverridesStore.byNormalisedName.get(normalised)`. Sync, offline-safe. Map is loaded + kept live by `CategoryOverridesRealtime` (mounted in `AppShell`). A user's manual pick in `EditItemSheet` writes a row to `household_category_overrides`, which an AFTER trigger propagates into the global `category_overrides` cache with `source='manual'` (excluding `'Other'` picks). Always wins — even over the keyword dictionary.
+2. **Keyword dictionary** — `detectCategoryKeyword(name): Category | null` in `src/lib/categories.ts`. ~1,000 keywords, AU-first with US/UK synonyms ("yoghurt"+"yogurt", "capsicum"+"bell pepper", "zucchini"+"courgette") and common typos. Multi-word keys for disambiguation ("tomato sauce" → Condiments, "ice cream" → Frozen, "peanut butter" → Condiments). Matcher prefers longest match. Returns `null` on miss.
+3. **Remote (LLM) tier** — keyword miss + online: fire-and-forget call to the `categorize_item` Supabase Edge Function (`supabase/functions/categorize_item/`). The function:
+   - Verifies the JWT and household membership via RLS on `household_members`.
+   - Checks `household_category_overrides` (per-household), then `category_overrides` (global) — both bypass RLS via service-role.
+   - On a miss: increments `category_request_counters` (150/day cap per household), then calls Gemini 2.5 Flash through the wrapper at `supabase/functions/categorize_item/llm.ts`. Constrained output via `responseSchema` enum.
+   - Writes a fresh LLM result into the global cache and returns `{ category, source }`.
+
+   The wrapper (`llm.ts`) is the seam — swapping Gemini for Haiku / GPT-mini is a one-file change as long as `classify(name): Promise<{ category }>` stays.
+
+**Offline + reconnect:** a keyword miss while offline marks the row `category_pending=true`. On reconnect, `sweepPendingCategories` (in `useList.ts`) walks pending rows and re-runs the remote tier — capped at 20/session, sequential to stay within the rate limit. Triggered on both `SUBSCRIBED` (via `fetchAndReconcile`) and the `online` window event (for brief blips where the socket never disconnected).
+
+**Counters tell the truth:** `category_request_counters.cache_hits` increments only on a real hit; `cache_misses` only on a real LLM call. Inspect via `select * from category_request_counters where day = current_date;` — no per-call Sentry breadcrumbs by design.
+
+**The Edge Function has a cold start.** First call after ~10 min idle from Australia → Seoul region takes ~2–3s (Deno isolate boot + TLS + sequential DB queries). Warm calls run ~300–600ms. Acceptable for a category that resolves while the user moves on; visible as the "Other → real category" flip.
 
 ---
 
