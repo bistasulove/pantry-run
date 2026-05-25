@@ -10,7 +10,9 @@ import { Sheet } from '@/components/ui/Sheet'
 import { useHousehold } from '@/hooks/useHousehold'
 import { useSession } from '@/hooks/useSession'
 import { CATEGORY_ORDER } from '@/lib/categories'
+import { upsertHouseholdOverride } from '@/lib/category-overrides'
 import { isUnitKey, type UnitKey } from '@/lib/units'
+import { useHouseholdStore } from '@/store/householdStore'
 import type { ListItem } from '@/store/listStore'
 
 const NOTE_MAX_LEN = 280
@@ -24,6 +26,7 @@ interface EditItemSheetProps {
     patch: {
       name?: string
       category?: string
+      category_pending?: boolean
       quantity_value?: number | null
       quantity_unit?: string | null
       note?: string | null
@@ -104,13 +107,20 @@ export function EditItemSheet({
     const patch: {
       name?: string
       category?: string
+      category_pending?: boolean
       quantity_value?: number | null
       quantity_unit?: string | null
       note?: string | null
       is_recurring?: boolean
     } = {}
     if (trimmedName !== item.name) patch.name = trimmedName
-    if (category !== item.category) patch.category = category
+    const categoryChanged = category !== item.category
+    if (categoryChanged) {
+      patch.category = category
+      // M15 — an explicit user pick is a confident answer. Clear the pending
+      // flag so the reconnect sweep doesn't re-categorise it back later.
+      if (item.category_pending) patch.category_pending = false
+    }
     if (quantityValue !== item.quantity_value) patch.quantity_value = quantityValue
     if (effectiveUnit !== item.quantity_unit) patch.quantity_unit = effectiveUnit
     if (isRecurring !== item.is_recurring) patch.is_recurring = isRecurring
@@ -124,6 +134,24 @@ export function EditItemSheet({
     setSubmitting(true)
     try {
       await onSave(item.id, patch)
+      // M15 — write-through to household_category_overrides so this pick
+      // sticks for future adds of the same item. A DB trigger propagates
+      // (name, category) into the global cache. Best-effort: failure is
+      // logged but doesn't block the save.
+      if (categoryChanged) {
+        const householdId = useHouseholdStore.getState().householdId
+        if (householdId) {
+          const result = await upsertHouseholdOverride(
+            householdId,
+            trimmedName.length > 0 ? trimmedName : item.name,
+            category,
+            userId,
+          )
+          if (!result.ok) {
+            console.warn('[EditItemSheet] override write failed', result.error)
+          }
+        }
+      }
       onClose()
     } finally {
       setSubmitting(false)
@@ -176,6 +204,9 @@ export function EditItemSheet({
               </option>
             ))}
           </select>
+          <span className="text-text-secondary text-[12px] leading-snug">
+            Your pick is remembered for this name across the household.
+          </span>
         </div>
 
         <div className="flex flex-col gap-1.5">

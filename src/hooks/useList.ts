@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 
-import { detectCategory } from '@/lib/categories'
+import { categorizeRemote, detectCategoryKeyword, FALLBACK_CATEGORY } from '@/lib/categories'
 import { loadListSnapshot, saveListSnapshot } from '@/lib/offline/cache'
 import { runQueuedOp } from '@/lib/offline/executor'
 import { enqueue, peekHead, queueLength, removeHead, type QueuedOp } from '@/lib/offline/queue'
@@ -41,6 +41,7 @@ export interface UseListApi {
     patch: {
       name?: string
       category?: string
+      category_pending?: boolean
       quantity_value?: number | null
       quantity_unit?: string | null
       note?: string | null
@@ -85,6 +86,67 @@ async function pushToQueue(op: QueuedOp): Promise<void> {
 // Module-scoped mutex so concurrent triggers (online event + SUBSCRIBED
 // reconnect firing close together) don't double-drain.
 let isDraining = false
+
+// M15 — fire-and-forget LLM resolution for a single item that hit the keyword
+// miss path in addItem. Failures (rate-limited, network, malformed) leave
+// category_pending=true so the reconnect sweep can retry on the next online
+// transition.
+async function resolvePendingCategory(
+  itemId: string,
+  itemName: string,
+  householdId: string,
+): Promise<void> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return
+
+  const result = await categorizeRemote(itemName, householdId)
+  if (result.source === 'error' || result.source === 'rate_limited') return
+
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('list_items')
+    .update({ category: result.category, category_pending: false })
+    .eq('id', itemId)
+
+  if (error) {
+    console.warn('[useList] resolvePendingCategory update failed', error)
+    return
+  }
+
+  // The realtime echo will eventually update the store too, but patch locally
+  // for snappier UX (especially on weak networks).
+  useListStore.getState().updateItemOptimistic(itemId, {
+    category: result.category,
+    category_pending: false,
+  })
+}
+
+// M15 — sweep all category_pending=true items for the current list on
+// reconnect / re-subscribe. Sequential to keep within the 150/day cap and
+// because Gemini's free tier RPM is also tight. Capped per session.
+let isSweepingPendingCategories = false
+const PENDING_SWEEP_LIMIT = 20
+
+async function sweepPendingCategories(listId: string, householdId: string): Promise<void> {
+  if (isSweepingPendingCategories) return
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return
+
+  const pending = useListStore
+    .getState()
+    .items.filter((i) => i.list_id === listId && i.category_pending)
+    .slice(0, PENDING_SWEEP_LIMIT)
+
+  if (pending.length === 0) return
+
+  isSweepingPendingCategories = true
+  try {
+    for (const item of pending) {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) break
+      await resolvePendingCategory(item.id, item.name, householdId)
+    }
+  } finally {
+    isSweepingPendingCategories = false
+  }
+}
 
 async function drainQueue(onAfterDrain?: () => void): Promise<void> {
   if (isDraining) return
@@ -184,6 +246,15 @@ export function useList(): UseListApi {
         useListStore.getState().reconcileWithServer(rows)
       }
       void saveListSnapshot(listId!, rows)
+
+      // M15 — kick off the pending-category sweep after we've reconciled with
+      // the server. Runs at most once per fetchAndReconcile cycle and is
+      // gated internally by `isSweepingPendingCategories` to coalesce with
+      // the concurrent visibility/online refetches.
+      const householdId = useHouseholdStore.getState().householdId
+      if (householdId && rows.some((r) => r.category_pending)) {
+        void sweepPendingCategories(listId!, householdId)
+      }
     }
 
     // Subscribe first, then fetch from inside the SUBSCRIBED callback. This
@@ -300,7 +371,16 @@ export function useList(): UseListApi {
       const id = crypto.randomUUID()
       const now = new Date().toISOString()
       const maxSort = itemsRef.current.reduce((acc, i) => Math.max(acc, i.sort_order), 0)
-      const category = detectCategory(name)
+
+      // M15 two-tier: keyword first (sync, offline). A miss flags the row as
+      // category_pending so the reconnect sweep (or the inline fire-and-forget
+      // below) can repair it later. We default the displayed category to
+      // 'Other' on a miss so the item shows up immediately under a known
+      // section rather than disappearing into limbo.
+      const keywordHit = detectCategoryKeyword(name)
+      const initialCategory = keywordHit ?? FALLBACK_CATEGORY
+      const needsRemote = keywordHit === null
+      const householdId = useHouseholdStore.getState().householdId
 
       const optimistic: ListItem = {
         id,
@@ -311,8 +391,8 @@ export function useList(): UseListApi {
         quantity: null,
         quantity_value: null,
         quantity_unit: null,
-        category,
-        category_pending: false,
+        category: initialCategory,
+        category_pending: needsRemote,
         is_checked: false,
         is_recurring: false,
         checked_by: null,
@@ -330,7 +410,8 @@ export function useList(): UseListApi {
         list_id: listId,
         added_by: userId ?? undefined,
         name,
-        category,
+        category: initialCategory,
+        category_pending: needsRemote,
         sort_order: maxSort + 1,
       }
 
@@ -342,7 +423,9 @@ export function useList(): UseListApi {
           if (isNetworkError(error)) {
             await pushToQueue({ kind: 'insert', row: optimistic })
             // Optimistic add stays in the store — the realtime echo (after
-            // drain) will be deduped via the id-presence check.
+            // drain) will be deduped via the id-presence check. The pending
+            // flag travels in the queued row and the reconnect sweep clears
+            // it once we're back online.
             return
           }
           console.error('[useList] add failed', error)
@@ -350,6 +433,13 @@ export function useList(): UseListApi {
           throw error
         }
         succeeded = true
+
+        // Inline LLM resolution — only when the keyword pass missed and we
+        // have an active household. Fire-and-forget; failures stay pending
+        // for the reconnect sweep to retry.
+        if (needsRemote && householdId) {
+          void resolvePendingCategory(id, name, householdId)
+        }
       } catch (error) {
         if (isNetworkError(error)) {
           await pushToQueue({ kind: 'insert', row: optimistic })
@@ -437,6 +527,7 @@ export function useList(): UseListApi {
       patch: {
         name?: string
         category?: string
+        category_pending?: boolean
         quantity_value?: number | null
         quantity_unit?: string | null
         note?: string | null
@@ -449,6 +540,7 @@ export function useList(): UseListApi {
       const next: Partial<ListItem> = {}
       if (patch.name !== undefined) next.name = patch.name.trim()
       if (patch.category !== undefined) next.category = patch.category
+      if (patch.category_pending !== undefined) next.category_pending = patch.category_pending
       if (patch.quantity_value !== undefined) next.quantity_value = patch.quantity_value
       if (patch.quantity_unit !== undefined) next.quantity_unit = patch.quantity_unit
       if (patch.is_recurring !== undefined) next.is_recurring = patch.is_recurring

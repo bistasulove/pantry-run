@@ -12,6 +12,12 @@ type ListItemRow = Database['public']['Tables']['list_items']['Row']
 // that mutates three tables atomically and is online-only. The executor still
 // silently drops any legacy clearChecked entries that may be sitting in older
 // IndexedDB queues.
+//
+// M15 deliberately does NOT add a queue kind for LLM categorisation. The
+// category_pending flag travels with the queued insert row, and the
+// reconnect sweep in useList re-runs categorizeRemote for each pending item
+// after the queue drains. Re-categorisation is best-effort, idempotent, and
+// retried on every reconnect — no need for durable queueing.
 export type QueuedOp =
   | { kind: 'insert'; row: ListItemRow }
   | {
@@ -22,6 +28,7 @@ export type QueuedOp =
           ListItemRow,
           | 'name'
           | 'category'
+          | 'category_pending'
           | 'is_checked'
           | 'is_recurring'
           | 'checked_by'

@@ -393,6 +393,10 @@ export type Database = {
       }
       finish_shopping: { Args: { p_list_id: string }; Returns: Json }
       gen_invite_code: { Args: never; Returns: string }
+      increment_category_counter: {
+        Args: { p_household_id: string; p_kind: string }
+        Returns: number
+      }
       is_household_member: {
         Args: { p_household_id: string }
         Returns: boolean

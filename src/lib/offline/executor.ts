@@ -45,6 +45,9 @@ export async function runQueuedOp(client: Client, op: QueuedOp): Promise<ExecRes
         name: r.name,
         quantity: r.quantity,
         category: r.category,
+        // M15 — pending flag set true for offline keyword-misses; the
+        // reconnect sweep clears it after queue drain.
+        category_pending: r.category_pending,
         is_checked: r.is_checked,
         checked_by: r.checked_by,
         checked_at: r.checked_at,

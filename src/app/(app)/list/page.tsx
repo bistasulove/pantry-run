@@ -87,6 +87,7 @@ export default function ListPage() {
     patch: {
       name?: string
       category?: string
+      category_pending?: boolean
       quantity_value?: number | null
       quantity_unit?: string | null
       note?: string | null
