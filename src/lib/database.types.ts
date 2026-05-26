@@ -290,6 +290,50 @@ export type Database = {
           },
         ]
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          household_id: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_agent_label: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          household_id: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_agent_label?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          household_id?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_agent_label?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopping_trip_items: {
         Row: {
           added_by_name: string | null

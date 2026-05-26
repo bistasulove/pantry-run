@@ -1,7 +1,7 @@
 /**
  * Pantry Run service worker — hand-rolled, no Workbox.
  *
- * Caching contract (CLAUDE.md §16, §20):
+ * Caching contract (CLAUDE.md §17, §21):
  *   - Static build assets (/_next/static/*, fonts, icons, manifest) → cache-first
  *   - HTML navigation requests → network-first with cache fallback (offline shell)
  *   - Anything cross-origin (Supabase, Google Fonts CDN if used) → pass through
@@ -13,7 +13,7 @@
  * without requiring a full reload.
  */
 
-const CACHE_VERSION = 'v2'
+const CACHE_VERSION = 'v3'
 const STATIC_CACHE = `pantry-run-static-${CACHE_VERSION}`
 const SHELL_CACHE = `pantry-run-shell-${CACHE_VERSION}`
 
@@ -105,7 +105,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
 
   // Cross-origin: Supabase API, Google Fonts CDN, anything else — pass through.
-  // Never cache Supabase responses (CLAUDE.md §16, §20: "always network-first
+  // Never cache Supabase responses (CLAUDE.md §17, §21: "always network-first
   // for data; never cache API responses").
   if (url.origin !== self.location.origin) return
 
@@ -128,4 +128,86 @@ self.addEventListener('fetch', (event) => {
 
   // Everything else same-origin: SWR for the snappy repeat-load benefit.
   event.respondWith(staleWhileRevalidate(request, STATIC_CACHE))
+})
+
+// ──────────────────────────────────────────────────────────────────────────
+// Push notifications (M16)
+//
+// Payload contract (sent by src/lib/push/send.ts):
+//   { title, body, kind, target_id?, household_id? }
+//
+//   kind is one of:
+//     'reminder' (M17) → opens /plan?tab=reminders&focus=<target_id>
+//     'task'     (M18) → opens /plan?tab=tasks&focus=<target_id>
+//     'test'     (M16 dev seam) → opens /list
+//
+// tag = `${kind}:${target_id}` so re-fires for the same target replace the
+// previous notification instead of stacking. Without a tag, every fire would
+// produce a new entry in the OS notification tray.
+// ──────────────────────────────────────────────────────────────────────────
+
+function routeForKind(kind, targetId) {
+  const focus = targetId ? `&focus=${encodeURIComponent(targetId)}` : ''
+  if (kind === 'reminder') return `/plan?tab=reminders${focus}`
+  if (kind === 'task') return `/plan?tab=tasks${focus}`
+  return '/list'
+}
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return
+  let payload
+  try {
+    payload = event.data.json()
+  } catch {
+    payload = { title: 'Pantry Run', body: event.data.text() }
+  }
+  const { title = 'Pantry Run', body = '', kind, target_id: targetId } = payload
+  const tag = kind && targetId ? `${kind}:${targetId}` : undefined
+  const url = routeForKind(kind, targetId)
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      tag,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { kind, targetId, url },
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url || '/list'
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const existing = all.find((c) => c.url.startsWith(self.location.origin))
+      if (existing) {
+        try {
+          await existing.focus()
+          await existing.navigate(url)
+        } catch {
+          // navigate() can reject (cross-document policy, detached client).
+          // Fall back to opening a fresh window so the user lands somewhere.
+          await self.clients.openWindow(url)
+        }
+        return
+      }
+      await self.clients.openWindow(url)
+    })(),
+  )
+})
+
+// pushsubscriptionchange fires when the browser rotates the endpoint (rare,
+// but happens on key refresh or quota events). The client re-subscribes and
+// POSTs the new subscription via usePushNotifications.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (const client of all) {
+        client.postMessage({ type: 'pushsubscriptionchange' })
+      }
+    })(),
+  )
 })

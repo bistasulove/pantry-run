@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { AccountSection } from '@/components/settings/AccountSection'
 import { LeaveHouseholdSection } from '@/components/settings/LeaveHouseholdSection'
+import { NotificationsSection } from '@/components/settings/NotificationsSection'
 import { ThemeToggle } from '@/components/settings/ThemeToggle'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -72,16 +73,9 @@ export function SettingsView() {
 
       <AccountSection />
 
-      <LeaveHouseholdSection />
+      <NotificationsSection />
 
-      <section className="flex flex-col gap-2">
-        <h3 className="text-text-primary text-[17px] leading-normal font-semibold">About</h3>
-        <p className="text-text-secondary text-[14px] leading-relaxed">
-          <span className="text-text-primary font-medium">Smarter categories</span> — new items are
-          auto-sorted by name. Unfamiliar items use AI categorisation while you&rsquo;re online;
-          everything you&rsquo;ve seen before works offline.
-        </p>
-      </section>
+      <LeaveHouseholdSection />
 
       <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>

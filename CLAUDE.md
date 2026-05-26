@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M15 shipped; V2 continuing, awaiting M16 kickoff
+ACTIVE: none — M16 shipped; V2 continuing, awaiting M17 kickoff
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5; V2 in Section 11.6.
@@ -48,7 +48,7 @@ Update this line when starting a new milestone. V1 milestone definitions are in 
 | M14                             | QA, Edge Cases & V1.1 Launch          | ✅ Done    |
 | **V2 — Household Coordination** |                                       |            |
 | M15                             | Smarter Categories                    | ✅ Done    |
-| M16                             | Push Notifications Infrastructure     | 📋 Planned |
+| M16                             | Push Notifications Infrastructure     | ✅ Done    |
 | M17                             | Household Reminders                   | 📋 Planned |
 | M18                             | Household Tasks                       | 📋 Planned |
 | M19                             | Activity Feed + Smart Suggestions     | 📋 Planned |
@@ -97,6 +97,7 @@ npx supabase gen types typescript --local > src/lib/database.types.ts  # Regener
 | Icons      | Lucide React                        | `lucide-react` package                                                          |
 | Fonts      | Plus Jakarta Sans, DM Sans, DM Mono | Via `next/font/google`                                                          |
 | Monitoring | Sentry (`@sentry/nextjs`)           | Errors only — no Replay, no Performance, no Profiling (V1.1)                    |
+| Push       | `web-push` + VAPID                  | Server-side send via `src/lib/push/send.ts` (M16); SW handles `push` events     |
 | Hosting    | Vercel                              | Auto-deploy on push to `main`                                                   |
 
 ---
@@ -236,6 +237,20 @@ SENTRY_DSN=
 # For local function testing, put it in supabase/functions/.env (gitignored)
 # and start the function with --env-file supabase/functions/.env.
 # GEMINI_API_KEY — never in .env.local
+
+# Supabase service-role — server-only (M16). Used by src/lib/push/send.ts
+# to fan out notifications across users in a household (RLS would block
+# cross-user reads). Never expose to the client. Set on Vercel (Production
+# + Preview), local from `npx supabase status`.
+SUPABASE_SERVICE_ROLE_KEY=
+
+# VAPID — Web Push key pair (M16). Public key ships to the browser to
+# identify your server in PushSubscription.subscribe(). Private key signs
+# every send. Generate with `npx web-push generate-vapid-keys --json`.
+# VAPID_SUBJECT must be a mailto: or https:// URL (spec requirement).
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:you@example.com
 ```
 
 Never commit `.env.local`. Never hardcode these values in any file.
@@ -244,7 +259,7 @@ Never commit `.env.local`. Never hardcode these values in any file.
 
 ## 7. Database Schema
 
-Nine tables, all with Row Level Security (RLS) enabled.
+Ten tables, all with Row Level Security (RLS) enabled.
 
 ```sql
 households
@@ -337,6 +352,19 @@ category_request_counters                                     -- M15 per-day per
   updated_at      timestamptz DEFAULT now()
   PRIMARY KEY (household_id, day)
   -- Service-role writes only, via the increment_category_counter SECURITY DEFINER RPC called from the categorize_item Edge Function
+
+push_subscriptions                                            -- M16 one row per (user, browser endpoint)
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  user_id           uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE
+  household_id      uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE  -- denormalised for fan-out
+  endpoint          text NOT NULL                                              -- Web Push endpoint URL
+  p256dh            text NOT NULL                                              -- subscription.keys.p256dh
+  auth              text NOT NULL                                              -- subscription.keys.auth
+  user_agent_label  text                                                       -- coarse label e.g. "iPhone Safari"
+  created_at        timestamptz NOT NULL DEFAULT now()
+  updated_at        timestamptz NOT NULL DEFAULT now()
+  UNIQUE (user_id, endpoint)
+  -- household_id is synced by the app at /api/push/subscribe time (hook re-POSTs on boot so household changes self-heal)
 ```
 
 **RLS rules (enforce in every migration):**
@@ -347,6 +375,7 @@ category_request_counters                                     -- M15 per-day per
 - `category_overrides` is publicly readable by authenticated users; writes only via the `categorize_item` Edge Function (service-role)
 - `household_category_overrides` is full-CRUD for household members; the propagation trigger writes through to `category_overrides`
 - `category_request_counters` is SELECT-only for household members; writes only via the `categorize_item` Edge Function (service-role) through the atomic `increment_category_counter` RPC
+- `push_subscriptions` is full-CRUD for the owning user only (`user_id = auth.uid()`); fan-out sends use the service-role client (`src/lib/supabase/admin.ts`)
 - Invite codes are publicly readable for validation; all other household data requires membership
 
 **Never** query Supabase without a user session attached. Always use the client from `src/lib/supabase/client.ts` on the browser and `src/lib/supabase/server.ts` in server components.
@@ -625,7 +654,55 @@ Resolution order in `useList.addItem` (sync first, then async fire-and-forget fo
 
 ---
 
-## 16. PWA Configuration
+## 16. Push Notifications (M16)
+
+Server-side Web Push delivery — used by M17 reminders and M18 task assignment. Three pieces: a VAPID key pair, a `push_subscriptions` table per (user, browser endpoint), and a service-role send helper.
+
+**Payload contract** (sent by `src/lib/push/send.ts`, parsed by `public/sw.js`):
+
+```typescript
+type PushPayload = {
+  title: string
+  body?: string
+  kind?: 'reminder' | 'task' | 'test'
+  target_id?: string // snake_case — travels straight to the SW unchanged
+  household_id?: string
+}
+```
+
+The SW maps `kind` → route on notification click:
+
+| `kind`     | URL opened                       |
+| ---------- | -------------------------------- |
+| `reminder` | `/plan?tab=reminders&focus=<id>` |
+| `task`     | `/plan?tab=tasks&focus=<id>`     |
+| `test`     | `/list` (M16 dev seam)           |
+
+Notifications use `tag: kind:target_id` so re-fires for the same target replace the previous OS notification instead of stacking.
+
+**Sending from server code:**
+
+```typescript
+import { sendToUser, sendToHousehold } from '@/lib/push/send'
+
+await sendToUser(userId, {
+  title: 'Bin night',
+  body: '7pm — tonight',
+  kind: 'reminder',
+  target_id: reminderId,
+})
+await sendToHousehold(householdId, payload, { excludeUserId: actorId })
+```
+
+Both return `{ sent, expired, failed }`. Expired-subscription cleanup (404/410) is inline — the helper deletes dead rows on the next send, no separate sweep job.
+
+**Subscribing from the client:** `usePushNotifications()` in `src/hooks/`. Handles support detection (incl. iOS-needs-PWA gate), permission prompt, `pushsubscriptionchange` re-subscription, and idempotent self-heal on app boot (re-POST to `/api/push/subscribe` overwrites `household_id` so users who switched households fan-out to the new home).
+
+`SUPABASE_SERVICE_ROLE_KEY` is required server-side for fan-out (RLS would block cross-user reads). Never expose it to the client.
+
+---
+
+## 17. PWA Configuration
 
 ```typescript
 // next.config.ts — withPWA wrapper
@@ -649,7 +726,7 @@ window.visualViewport?.addEventListener('resize', adjustForKeyboard)
 
 ---
 
-## 17. Accessibility Requirements
+## 18. Accessibility Requirements
 
 Every component must meet these standards before it is considered done:
 
@@ -666,7 +743,7 @@ Run Lighthouse accessibility audit before marking any milestone done. Target: �
 
 ---
 
-## 18. Code Quality Gates
+## 19. Code Quality Gates
 
 Run these before every commit. Never commit if any fail:
 
@@ -680,7 +757,7 @@ The CI pipeline (GitHub Actions) runs these on every PR and blocks merge on fail
 
 ---
 
-## 19. What Is Out of Scope for V1
+## 20. What Is Out of Scope for V1
 
 Do not build, plan, or scaffold these until they appear in an active milestone:
 
@@ -698,7 +775,7 @@ If asked to build any of these during V1, decline and note it's a future milesto
 
 ---
 
-## 20. Absolute Rules — Never Break These
+## 21. Absolute Rules — Never Break These
 
 ```
 ❌ Never use the Next.js Pages Router — App Router only
@@ -715,7 +792,7 @@ If asked to build any of these during V1, decline and note it's a future milesto
 
 ---
 
-## 21. Asking for Help
+## 22. Asking for Help
 
 If something in this file conflicts with something in `docs/plan.md` or
 `docs/design_document_guidelines.md`, the more specific document wins.
