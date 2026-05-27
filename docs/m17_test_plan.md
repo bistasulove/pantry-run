@@ -18,16 +18,20 @@ Result of the dev-time smoke from 2026-05-27:
 - ✅ `pg_net` POST to `/api/cron/fire-reminders` returns 200; the route writes back `delivery_status = 'no_subscriptions'` and a `sent=N expired=N failed=N` detail when no devices are subscribed.
 - ✅ `next_fire` smoke (run against the local DB at Phase 1):
 
-| RRULE                                  | Base UTC                               | Expected Next UTC               | Pass |
-| -------------------------------------- | -------------------------------------- | ------------------------------- | ---- |
-| `FREQ=WEEKLY;BYDAY=TH`                 | 2026-05-28 09:00 (Thu 7pm Sydney AEST) | 2026-06-04 09:00 (Thu 7pm AEST) | ✅   |
-| `FREQ=DAILY`                           | 2026-05-26 09:00                       | 2026-05-27 09:00                | ✅   |
-| `FREQ=MONTHLY;BYMONTHDAY=1`            | 2026-04-30 23:00 (1 May 9am Sydney)    | 2026-05-31 23:00 (1 Jun 9am)    | ✅   |
-| `FREQ=WEEKLY;BYDAY=MO,TH`              | 2026-05-26 09:00 (Mon)                 | 2026-05-28 09:00 (Thu)          | ✅   |
-| `FREQ=WEEKLY;BYDAY=TH` (across DST)    | 2026-10-01 09:00 (AEST)                | 2026-10-08 08:00 (AEDT)         | ✅   |
-| `FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=25` | 2026-12-25 12:00                       | 2027-12-25 12:00                | ✅   |
-| `FREQ=WEEKLY;BYDAY=SU` from a Sunday   | 2026-05-31 09:00                       | 2026-06-07 09:00 (next SU)      | ✅   |
-| Null rrule                             | any                                    | NULL                            | ✅   |
+| RRULE                                        | Base UTC                               | Expected Next UTC               | Pass |
+| -------------------------------------------- | -------------------------------------- | ------------------------------- | ---- |
+| `FREQ=WEEKLY;BYDAY=TH`                       | 2026-05-28 09:00 (Thu 7pm Sydney AEST) | 2026-06-04 09:00 (Thu 7pm AEST) | ✅   |
+| `FREQ=DAILY`                                 | 2026-05-26 09:00                       | 2026-05-27 09:00                | ✅   |
+| `FREQ=MONTHLY;BYMONTHDAY=1`                  | 2026-04-30 23:00 (1 May 9am Sydney)    | 2026-05-31 23:00 (1 Jun 9am)    | ✅   |
+| `FREQ=WEEKLY;BYDAY=MO,TH`                    | 2026-05-26 09:00 (Mon)                 | 2026-05-28 09:00 (Thu)          | ✅   |
+| `FREQ=WEEKLY;BYDAY=TH` (across DST)          | 2026-10-01 09:00 (AEST)                | 2026-10-08 08:00 (AEDT)         | ✅   |
+| `FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=25`       | 2026-12-25 12:00                       | 2027-12-25 12:00                | ✅   |
+| `FREQ=WEEKLY;BYDAY=SU` from a Sunday         | 2026-05-31 09:00                       | 2026-06-07 09:00 (next SU)      | ✅   |
+| `FREQ=WEEKLY;BYDAY=TH;INTERVAL=2` from a Thu | 2026-05-28 09:00                       | 2026-06-11 09:00 (+14)          | ✅   |
+| Same rule, advance again                     | 2026-06-11 09:00                       | 2026-06-25 09:00 (+14)          | ✅   |
+| `FREQ=WEEKLY;BYDAY=TH;INTERVAL=2` across DST | 2026-10-01 09:00 (AEST)                | 2026-10-15 08:00 (AEDT)         | ✅   |
+| `FREQ=WEEKLY;INTERVAL=2` no BYDAY            | 2026-05-28 09:00                       | 2026-06-11 09:00                | ✅   |
+| Null rrule                                   | any                                    | NULL                            | ✅   |
 
 DST verification: the AEST→AEDT shift on 4 Oct 2026 correctly moves the UTC offset from +10 to +11; the local 7pm time stays constant. This is the headline behaviour the timezone column was added to guarantee.
 

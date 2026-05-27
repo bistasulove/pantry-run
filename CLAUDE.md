@@ -771,14 +771,15 @@ Recurring household-wide notifications: "every Thursday is bin night", "rent eve
 
 **Recurrence semantics.** An RRULE subset stored as opaque text:
 
-| FREQ      | BYDAY                | BYMONTHDAY | BYMONTH | Example                                |
-| --------- | -------------------- | ---------- | ------- | -------------------------------------- |
-| `DAILY`   | —                    | —          | —       | `FREQ=DAILY`                           |
-| `WEEKLY`  | MO,TU,WE,TH,FR,SA,SU | —          | —       | `FREQ=WEEKLY;BYDAY=TH`                 |
-| `MONTHLY` | —                    | 1..31      | —       | `FREQ=MONTHLY;BYMONTHDAY=1`            |
-| `YEARLY`  | —                    | 1..31      | 1..12   | `FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=25` |
+| Preset      | RRULE shape                                  | Example                                |
+| ----------- | -------------------------------------------- | -------------------------------------- |
+| Daily       | `FREQ=DAILY`                                 | `FREQ=DAILY`                           |
+| Weekly      | `FREQ=WEEKLY;BYDAY=…` (multi-day allowed)    | `FREQ=WEEKLY;BYDAY=MO,TH`              |
+| Fortnightly | `FREQ=WEEKLY;BYDAY=<single>;INTERVAL=2`      | `FREQ=WEEKLY;BYDAY=TH;INTERVAL=2`      |
+| Monthly     | `FREQ=MONTHLY;BYMONTHDAY=N` (1..31, clamped) | `FREQ=MONTHLY;BYMONTHDAY=1`            |
+| Yearly      | `FREQ=YEARLY;BYMONTH=M;BYMONTHDAY=N`         | `FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=25` |
 
-One-shot = `recurrence is null`. `next_fire()` returns NULL for one-shots and `fire_due_reminders` flips `is_active=false`. The client mirror at `src/lib/recurrence.ts` produces the same UTC instants the cron will — used by the EditSheet's "Next 3 fires:" preview. The two implementations must stay in lockstep (the Phase 1 smoke verifies seven canonical cases including the AEST↔AEDT boundary).
+One-shot = `recurrence is null`. `INTERVAL` only matters on WEEKLY in V2 (single-day Fortnightly); the plpgsql `next_fire` reads it and `nextFire` in TS mirrors. Multi-day + INTERVAL>1 is unreachable from the UI but the plpgsql is forward-progressing in case a row is inserted directly. `next_fire()` returns NULL for one-shots and `fire_due_reminders` flips `is_active=false`. The client mirror at `src/lib/recurrence.ts` produces the same UTC instants the cron will — used by the EditSheet's "Next 3 fires:" preview. The two implementations must stay in lockstep (the Phase 1 smoke verifies seven canonical cases including the AEST↔AEDT boundary).
 
 **Timezone as scheduling anchor.** `households.timezone` (IANA name, default `Australia/Sydney`) is the anchor for the recurrence math. "Every Thursday at 7pm" stays at 7pm local across DST because `next_fire` does the calendar arithmetic in the household tz then re-projects to UTC. Display is always in the **viewer's device tz**, not the household's — so a traveling member sees the equivalent local time. Auto-detected from `Intl.DateTimeFormat().resolvedOptions().timeZone` at create-household time; editable by any member from `/household` via the `set_household_timezone(uuid, text)` RPC.
 

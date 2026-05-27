@@ -17,6 +17,7 @@ const KINDS: Array<{ kind: RecurrencePreset['kind']; label: string }> = [
   { kind: 'once', label: 'Once' },
   { kind: 'daily', label: 'Daily' },
   { kind: 'weekly', label: 'Weekly' },
+  { kind: 'fortnightly', label: 'Fortnightly' },
   { kind: 'monthly', label: 'Monthly' },
   { kind: 'yearly', label: 'Yearly' },
 ]
@@ -31,6 +32,8 @@ function defaultForKind(kind: RecurrencePreset['kind']): RecurrencePreset {
       return { kind: 'daily' }
     case 'weekly':
       return { kind: 'weekly', days: ['TH'] }
+    case 'fortnightly':
+      return { kind: 'fortnightly', day: 'TH' }
     case 'monthly':
       return { kind: 'monthly', dayOfMonth: 1 }
     case 'yearly':
@@ -96,6 +99,35 @@ export function RecurrencePresetPicker({ value, onChange }: RecurrencePresetPick
               </button>
             )
           })}
+        </div>
+      ) : null}
+
+      {value.kind === 'fortnightly' ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Day of week">
+            {WEEKDAY_CODES.map((code) => {
+              const selected = value.day === code
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => onChange({ kind: 'fortnightly', day: code })}
+                  className={`flex h-10 w-12 items-center justify-center rounded-lg text-[13px] leading-snug font-semibold transition-colors duration-150 ${
+                    selected
+                      ? 'bg-accent text-white'
+                      : 'bg-bg-base text-text-secondary border-border-default border'
+                  }`}
+                >
+                  {WEEKDAY_LABELS[code]}
+                </button>
+              )
+            })}
+          </div>
+          <span className="text-text-secondary text-[12px] leading-snug">
+            Fires every two weeks on this day, anchored to the first fire.
+          </span>
         </div>
       ) : null}
 

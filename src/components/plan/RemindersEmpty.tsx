@@ -22,6 +22,13 @@ export const EXAMPLE_PRESETS: ExamplePreset[] = [
     leadMinutes: 60,
   },
   {
+    title: 'Pay day',
+    preset: { kind: 'fortnightly', day: 'TH' },
+    hour: 9,
+    minute: 0,
+    leadMinutes: 0,
+  },
+  {
     title: 'Rent',
     preset: { kind: 'monthly', dayOfMonth: 1 },
     hour: 9,

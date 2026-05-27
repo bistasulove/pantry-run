@@ -31,6 +31,10 @@ export type RecurrencePreset =
   | { kind: 'once' }
   | { kind: 'daily' }
   | { kind: 'weekly'; days: WeekdayCode[] }
+  // Fortnightly = WEEKLY with INTERVAL=2, restricted to a single day. AU pay
+  // and rent cycles are overwhelmingly fortnightly; multi-day fortnightly
+  // is rare and weird, so the V2 UI exposes single-day only.
+  | { kind: 'fortnightly'; day: WeekdayCode }
   | { kind: 'monthly'; dayOfMonth: number }
   | { kind: 'yearly'; month: number; dayOfMonth: number }
 
@@ -48,6 +52,8 @@ export function encodeRrule(preset: RecurrencePreset): string | null {
       const days = preset.days.length > 0 ? preset.days : ['MO']
       return `FREQ=WEEKLY;BYDAY=${days.join(',')}`
     }
+    case 'fortnightly':
+      return `FREQ=WEEKLY;BYDAY=${preset.day};INTERVAL=2`
     case 'monthly':
       return `FREQ=MONTHLY;BYMONTHDAY=${preset.dayOfMonth}`
     case 'yearly':
@@ -63,12 +69,18 @@ export function decodeRrule(rrule: string | null | undefined): RecurrencePreset 
     if (eq > 0) parts.set(seg.slice(0, eq).toUpperCase(), seg.slice(eq + 1).toUpperCase())
   }
   const freq = parts.get('FREQ')
+  const interval = Math.max(1, Number(parts.get('INTERVAL') ?? '1') || 1)
   if (freq === 'DAILY') return { kind: 'daily' }
   if (freq === 'WEEKLY') {
     const byday = parts.get('BYDAY') ?? ''
     const days = byday
       .split(',')
       .filter((d): d is WeekdayCode => (WEEKDAY_CODES as string[]).includes(d))
+    if (interval === 2) {
+      // Fortnightly. Multi-day fortnightly is unreachable from the UI; if
+      // we get one via direct DB edit, fall back to the first day.
+      return { kind: 'fortnightly', day: days[0] ?? 'MO' }
+    }
     return { kind: 'weekly', days: days.length > 0 ? days : ['MO'] }
   }
   if (freq === 'MONTHLY') {
@@ -212,6 +224,16 @@ export function nextFire(rrule: string | null | undefined, base: Date, tz: strin
     return advanceDays(local, ahead, tz)
   }
 
+  if (preset.kind === 'fortnightly') {
+    // Mirror of the plpgsql formula: advance to next matching DOW, then add
+    // 7 more days for INTERVAL=2. From a previous fire on the BYDAY day, the
+    // matching-DOW distance is 7, so this yields the natural +14 days.
+    const target = ISO_DOW[preset.day]
+    const curDow = isoDow(local)
+    const ahead = target > curDow ? target - curDow : target - curDow + 7
+    return advanceDays(local, ahead + 7, tz)
+  }
+
   if (preset.kind === 'monthly') {
     let y = local.year
     let m = local.month + 1
@@ -323,6 +345,18 @@ export function computeFirstFire(
       const diff = d > curDow ? d - curDow : d - curDow + 7
       if (diff < ahead) ahead = diff
     }
+    return advanceDays(anchorLocal, ahead, tz, hour, minute)
+  }
+
+  if (preset.kind === 'fortnightly') {
+    // First fire is the next matching weekday at the chosen time — no
+    // INTERVAL math yet. The cron's nextFire is what makes subsequent fires
+    // jump 14 days; the first fire is just "next <day>".
+    const target = ISO_DOW[preset.day]
+    const curDow = isoDow(anchorLocal)
+    const todayAtTime = localPartsToUtc({ ...anchorLocal, hour, minute }, tz)
+    if (curDow === target && todayAtTime.getTime() > anchor.getTime()) return todayAtTime
+    const ahead = target > curDow ? target - curDow : target - curDow + 7
     return advanceDays(anchorLocal, ahead, tz, hour, minute)
   }
 
