@@ -3,10 +3,12 @@ import { openDB, type IDBPDatabase } from 'idb'
 import type { Database } from '@/lib/database.types'
 
 type ListItemRow = Database['public']['Tables']['list_items']['Row']
+type TaskRow = Database['public']['Tables']['tasks']['Row']
 
-// Discriminated union of every mutation `useList` performs against `list_items`.
-// Captured at the call site (with all the data needed to replay), then drained
-// by the executor against Supabase when the network returns.
+// Discriminated union of every mutation `useList` (list_items) and `useTasks`
+// (tasks) performs. Captured at the call site with all the data needed to
+// replay, then drained by the executor against Supabase when the network
+// returns.
 //
 // Note: M11 removed the `clearChecked` kind — "Finish shopping" calls an RPC
 // that mutates three tables atomically and is online-only. The executor still
@@ -18,6 +20,12 @@ type ListItemRow = Database['public']['Tables']['list_items']['Row']
 // reconnect sweep in useList re-runs categorizeRemote for each pending item
 // after the queue drains. Re-categorisation is best-effort, idempotent, and
 // retried on every reconnect — no need for durable queueing.
+//
+// M18 adds task_create / task_update / task_delete. The assignment-push
+// fan-out for tasks does NOT travel in the queue: when a queued task_create
+// or task_update with an assignee drains successfully, useTasks fires the
+// push from the drain callback at that moment. Queueing the HTTP send would
+// duplicate retry logic that the queue already implements for the DB write.
 export type QueuedOp =
   | { kind: 'insert'; row: ListItemRow }
   | {
@@ -41,6 +49,29 @@ export type QueuedOp =
       >
     }
   | { kind: 'delete'; id: string }
+  | { kind: 'task_create'; row: TaskRow }
+  | {
+      kind: 'task_update'
+      id: string
+      patch: Partial<
+        Pick<
+          TaskRow,
+          | 'title'
+          | 'notes'
+          | 'assignee_id'
+          | 'due_date'
+          | 'is_completed'
+          | 'completed_at'
+          | 'completed_by'
+        >
+      >
+      // True iff this update is (or includes) a reassignment to a non-null
+      // assignee. The executor fires the assignment push after the row write
+      // lands. The API route fetches title + assignee + household from the
+      // row server-side, so no payload data is needed here.
+      notifyAssignee?: boolean
+    }
+  | { kind: 'task_delete'; id: string }
 
 export interface QueuedRecord {
   id: number

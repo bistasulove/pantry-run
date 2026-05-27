@@ -6,13 +6,22 @@ interface AssigneePickerProps {
   value: string | null
   members: Member[]
   onChange: (next: string | null) => void
+  // What the null row says. Reminders use "Whole household" (fan-out to
+  // every member); tasks use "Unassigned" (nobody specifically responsible).
+  // Defaults to the reminder phrasing for backward compat with M17.
+  unassignedLabel?: string
 }
 
-// Radio-list assignee picker. null = whole household; otherwise a userId.
-// Falls back to "Whole household" if the previously-assigned member has
-// since left (no row matches the userId).
+// Radio-list assignee picker. null = whole household (reminders) /
+// unassigned (tasks); otherwise a userId. Falls back to null if the
+// previously-assigned member has since left (no row matches the userId).
 
-export function AssigneePicker({ value, members, onChange }: AssigneePickerProps) {
+export function AssigneePicker({
+  value,
+  members,
+  onChange,
+  unassignedLabel = 'Whole household',
+}: AssigneePickerProps) {
   const knownIds = new Set(members.map((m) => m.userId))
   const safeValue = value !== null && !knownIds.has(value) ? null : value
 
@@ -20,7 +29,7 @@ export function AssigneePicker({ value, members, onChange }: AssigneePickerProps
     <fieldset className="border-border-default flex flex-col gap-1 rounded-xl border p-2">
       <legend className="sr-only">Assigned to</legend>
       <Option
-        label="Whole household"
+        label={unassignedLabel}
         selected={safeValue === null}
         onClick={() => onChange(null)}
       />

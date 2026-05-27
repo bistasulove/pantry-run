@@ -22,7 +22,7 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M17 shipped; V2 continuing, awaiting M18 kickoff
+ACTIVE: none — M18 shipped; V2 continuing, awaiting M19 kickoff
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5; V2 in Section 11.6.
@@ -50,7 +50,7 @@ Update this line when starting a new milestone. V1 milestone definitions are in 
 | M15                             | Smarter Categories                    | ✅ Done    |
 | M16                             | Push Notifications Infrastructure     | ✅ Done    |
 | M17                             | Household Reminders                   | ✅ Done    |
-| M18                             | Household Tasks                       | 📋 Planned |
+| M18                             | Household Tasks                       | ✅ Done    |
 | M19                             | Activity Feed + Smart Suggestions     | 📋 Planned |
 | M20                             | QA, Edge Cases & V2 Launch            | 📋 Planned |
 
@@ -145,17 +145,22 @@ pantry-run/
 │   │   │   ├── TripDetailSheet.tsx   # Trip items + restore actions
 │   │   │   ├── MonthGroup.tsx        # Month section heading
 │   │   │   └── EmptyState.tsx        # No-trips / offline empty
-│   │   ├── plan/                     # M17 reminders + V2 UI primitives
+│   │   ├── plan/                     # M17 reminders + M18 tasks + V2 UI primitives
 │   │   │   ├── SegmentedControl.tsx  # Design-system §7.16 (Plan tabs)
+│   │   │   ├── FilterChipRow.tsx     # Design-system §7.17 (Tasks filter)
 │   │   │   ├── RemindersList.tsx     # Today / This week / Later sections
 │   │   │   ├── ReminderRow.tsx       # Title + next-fire + assignee
 │   │   │   ├── ReminderEditSheet.tsx # Create/edit; Next-3-fires preview
 │   │   │   ├── RecurrencePresetPicker.tsx
 │   │   │   ├── LeadMinutesPicker.tsx
-│   │   │   ├── AssigneePicker.tsx
+│   │   │   ├── AssigneePicker.tsx    # Used by both reminders + tasks (unassignedLabel prop)
 │   │   │   ├── RemindersEmpty.tsx    # Onboarding + example presets
 │   │   │   ├── PlanRemindersView.tsx
-│   │   │   ├── PlanTasksView.tsx     # M18 placeholder
+│   │   │   ├── TasksList.tsx         # M18 Open + Completed (collapsed) sections
+│   │   │   ├── TaskRow.tsx           # Checkbox + title + due chip + assignee
+│   │   │   ├── TaskEditSheet.tsx     # Create/edit; due-date picker
+│   │   │   ├── TasksEmpty.tsx        # M18 onboarding + example tasks
+│   │   │   ├── PlanTasksView.tsx     # M18 — filter chips + list + FAB
 │   │   │   └── format.ts             # Bucket + label helpers (device tz)
 │   │   ├── household/
 │   │   │   ├── InviteCode.tsx        # Invite code display + share
@@ -175,6 +180,7 @@ pantry-run/
 │   │   ├── useHistory.ts             # Shopping trips (M12) + Realtime INSERT
 │   │   ├── useTripItems.ts           # Lazy fetch for one trip's items
 │   │   ├── useReminders.ts           # M17 reminder CRUD (online-only)
+│   │   ├── useTasks.ts               # M18 task CRUD (offline-queueable)
 │   │   ├── useOfflineQueue.ts        # IndexedDB write queue
 │   │   └── useNetworkStatus.ts       # Online/offline detection
 │   │
@@ -192,7 +198,8 @@ pantry-run/
 │   │   ├── userStore.ts              # userId, isAnonymous, displayName
 │   │   ├── householdStore.ts         # householdId, name, timezone, members
 │   │   ├── listStore.ts              # items, optimistic updates
-│   │   └── reminderStore.ts          # M17 reminders cache
+│   │   ├── reminderStore.ts          # M17 reminders cache
+│   │   └── taskStore.ts              # M18 tasks cache
 │   │
 │   ├── proxy.ts                      # Auth proxy (Next.js 16) — protects (app) routes
 │   ├── instrumentation.ts            # Server runtime register() hook (M13 Sentry)
@@ -287,7 +294,7 @@ Never commit `.env.local`. Never hardcode these values in any file.
 
 ## 7. Database Schema
 
-Thirteen tables, all with Row Level Security (RLS) enabled.
+Fourteen tables, all with Row Level Security (RLS) enabled.
 
 ```sql
 households
@@ -423,6 +430,22 @@ app_settings                                                  -- M17 server-only
   value text NOT NULL
   -- RLS enabled with no policies = authenticated clients can't read; service-role + SECURITY DEFINER bypass
   -- Two rows ship with local-dev defaults; operators overwrite on prod via SQL editor
+
+tasks                                                         -- M18 assignable household chores (no scheduler)
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid()
+  household_id  uuid NOT NULL REFERENCES households(id) ON DELETE CASCADE
+  title         text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 120)
+  notes         text CHECK (notes IS NULL OR char_length(notes) <= 500)
+  assignee_id   uuid REFERENCES auth.users(id) ON DELETE SET NULL              -- null = unassigned (no push fan-out)
+  due_date      date                                                           -- date-only, all-day; null = undated, sorted last
+  is_completed  boolean NOT NULL DEFAULT false
+  completed_at  timestamptz                                                    -- paired with is_completed via CHECK
+  completed_by  uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  created_by    uuid REFERENCES auth.users(id) ON DELETE SET NULL
+  created_at    timestamptz NOT NULL DEFAULT now()
+  updated_at    timestamptz NOT NULL DEFAULT now()
+  CHECK ((is_completed = false AND completed_at IS NULL) OR (is_completed = true AND completed_at IS NOT NULL))
+  -- Indexes (partial): open-by-due, completed-by-completed-at, open-by-assignee (BottomNav badge)
 ```
 
 **RLS rules (enforce in every migration):**
@@ -437,6 +460,7 @@ app_settings                                                  -- M17 server-only
 - `reminders` is full-CRUD for household members; `households.timezone` is editable by any member via the `set_household_timezone(uuid, text)` SECURITY DEFINER RPC (the table's UPDATE policy remains owner-only otherwise)
 - `reminder_fires` is SELECT-only for household members; writes happen via the `fire_due_reminders()` SECURITY DEFINER plpgsql function (called by `pg_cron`) and the `/api/cron/fire-reminders` route (service-role)
 - `app_settings` has RLS enabled with no policies — authenticated clients are default-denied. Service-role + SECURITY DEFINER functions can read/write. Two rows (`fire_reminders_endpoint`, `cron_secret`) are populated by the M17 migration with local-dev defaults; prod operators overwrite via the SQL editor
+- `tasks` is full-CRUD for household members. Assignment-push delivery uses `/api/push/task-assigned` (Node runtime), which verifies the caller via RLS then fans out via `sendToUser(assignee_id)` using the service-role client
 - Invite codes are publicly readable for validation; all other household data requires membership
 
 **Never** query Supabase without a user session attached. Always use the client from `src/lib/supabase/client.ts` on the browser and `src/lib/supabase/server.ts` in server components.
@@ -798,14 +822,43 @@ One-shot = `recurrence is null`. `INTERVAL` only matters on WEEKLY in V2 (single
 
 **V2 UI primitives that land with M17.**
 
-- **`/plan` route** with a segmented control (Reminders | Tasks). Tasks renders the M18 placeholder; the control itself is the design-system §7.16 primitive.
+- **`/plan` route** with a segmented control (Reminders | Tasks). Both segments are live as of M18; the control itself is the design-system §7.16 primitive.
 - **BottomNav refactor** — `List | Plan | History | Avatar`. Avatar chip (§7.19) opens a Sheet with Household / Settings / Notifications (anchor) / Sign out. Existing routes (`/household`, `/settings`) keep working; only the entry point moved.
 - **`RemindersRealtime`** provider mounted in `AppShell` — fetches on mount, subscribes to the `reminders` channel filtered by `household_id`, re-fetches on `SUBSCRIBED` + `online` (the M16 reconnect lesson).
 - **`useReminders` hook** — online-only CRUD. When `recurrence` changes without an explicit `nextFireAt`, the hook calls `nextFire(rrule, now(), tz)` so the new rule fires at its next valid future occurrence.
 
 ---
 
-## 18. PWA Configuration
+## 18. Household Tasks (M18)
+
+Assignable, due-dated chores. Same household-scoped + member-CRUD + realtime shape as M17 reminders, minus the scheduler — a task is "done when someone marks it done", not "fires at time T". Recurring tasks are deliberately deferred to V2.1 (`docs/plan.md` §M18) — a truly scheduled chore fits the reminder primitive better.
+
+**Schema lives in `tasks`** with completion-state fields paired by a CHECK constraint (`is_completed=true ⇒ completed_at NOT NULL`). All three user references (`assignee_id`, `completed_by`, `created_by`) use `ON DELETE SET NULL` so a row survives the assignee, completer, or creator leaving — the UI shows "Unassigned"/"Former member" via the M3.5 snapshot pattern. Three partial indexes cover the hot read paths: open-by-due, completed-by-completed-at, and open-by-assignee (the BottomNav badge).
+
+**`useTasks` hook** does the full optimistic + offline-queueable CRUD: `createTask`, `updateTask`, `completeTask`, `uncompleteTask`, `deleteTask`. Mirror of `useList`'s queueing pattern — unlike M17 reminders (deliberately online-only), tasks support offline writes because checking off a chore on the bus shouldn't require waiting for sync.
+
+**Offline queue extension.** `QueuedOp` (in `src/lib/offline/queue.ts`) gained three new variants: `task_create | task_update | task_delete`. The existing `useList` drain loop (mutex-guarded, fired on `online` + `SUBSCRIBED` + visibility change) drains them in FIFO order with the rest. New helper in `src/lib/push/client.ts` — `notifyTaskAssignment(taskId)` — fires the assignment push fire-and-forget; both the online write path (`useTasks`) and the offline drain path (`executor.ts`'s `task_create`/`task_update` arms) call it. The assignment push itself is **not** queued — once the DB write lands, the push is a single best-effort HTTP call.
+
+**Assignment-push delivery (`/api/push/task-assigned`, M18 D1=A).** Node-runtime route. The client POSTs `{ task_id }`. The route:
+
+1. Verifies the caller via the user's JWT (`createClient` from `src/lib/supabase/server.ts`).
+2. SELECTs the task through the user's RLS view — non-members get `null` → 404.
+3. Resolves the actor's `display_name` from `household_members` via the admin client.
+4. Calls `sendToUser(task.assignee_id, { kind: 'task', target_id, household_id, title, body: '<actor> assigned: <title>' })`.
+
+Returns `{ ok, sent, expired, failed }` per the M16 "surface the payload, not just status" lesson. Unassigned tasks short-circuit with `{ skipped: true, sent: 0 }`. Push payload reuses the M16 contract (`PushKind` already includes `'task'`); the SW maps `kind:'task'` → `/plan?tab=tasks&focus=<task_id>`.
+
+**Plan→Tasks UI.** `src/components/plan/PlanTasksView.tsx` replaces the M17 placeholder. Owns: filter chips, list grouping (`Open` sorted by `due_date asc nulls last, created_at asc`; `Completed` collapsed and capped at 30 days at fetch time), empty state, FAB, edit-sheet open/close, `?focus=<id>` deep-link handling. `FilterChipRow` (design-system §7.17) is the new shared primitive — single-select radiogroup with optional count badges, horizontal scroll, hidden scrollbar, roving tabindex.
+
+**BottomNav badge.** Plan tab gets a count pill = open tasks where `assignee_id === currentUserId`. Capped at `9+`. Derived from the same `useTaskStore` PlanTasksView reads, so it stays in lockstep with optimistic completions and realtime edits.
+
+**30-day completed cutoff (M18 D8).** `TasksRealtime` fetches open tasks unconditionally + completed tasks where `completed_at >= now() - interval '30 days'`. Older completions are dropped from the cache, not just hidden, keeping the store bounded on long-lived households. A row that re-opens via realtime UPDATE always comes back into view.
+
+**Notification settings.** No per-type toggle in M18 (D3=B). The Settings → Notifications enable/disable still governs both reminders and tasks globally. If users complain post-launch, add a `notification_preferences` table in V2.1 — pre-building it now is premature.
+
+---
+
+## 19. PWA Configuration
 
 ```typescript
 // next.config.ts — withPWA wrapper
@@ -829,7 +882,7 @@ window.visualViewport?.addEventListener('resize', adjustForKeyboard)
 
 ---
 
-## 19. Accessibility Requirements
+## 20. Accessibility Requirements
 
 Every component must meet these standards before it is considered done:
 
@@ -846,7 +899,7 @@ Run Lighthouse accessibility audit before marking any milestone done. Target: �
 
 ---
 
-## 20. Code Quality Gates
+## 21. Code Quality Gates
 
 Run these before every commit. Never commit if any fail:
 
@@ -860,7 +913,7 @@ The CI pipeline (GitHub Actions) runs these on every PR and blocks merge on fail
 
 ---
 
-## 21. What Is Out of Scope for V1
+## 22. What Is Out of Scope for V1
 
 Do not build, plan, or scaffold these until they appear in an active milestone:
 
@@ -878,7 +931,7 @@ If asked to build any of these during V1, decline and note it's a future milesto
 
 ---
 
-## 22. Absolute Rules — Never Break These
+## 23. Absolute Rules — Never Break These
 
 ```
 ❌ Never use the Next.js Pages Router — App Router only
@@ -895,7 +948,7 @@ If asked to build any of these during V1, decline and note it's a future milesto
 
 ---
 
-## 23. Asking for Help
+## 24. Asking for Help
 
 If something in this file conflicts with something in `docs/plan.md` or
 `docs/design_document_guidelines.md`, the more specific document wins.

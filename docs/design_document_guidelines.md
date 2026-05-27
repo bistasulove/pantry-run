@@ -597,18 +597,24 @@ Two-way (or N-way) switch used inside `/plan` to toggle between Reminders and Ta
 - **Accessibility:** `role="tablist"` on the row, `role="tab"` on each segment with `aria-selected`. Inactive segments are `tabIndex={-1}`; the active one is `tabIndex={0}`. The component takes an `ariaLabel` prop (e.g. "Plan view") that becomes the row's `aria-label`.
 - **Dark mode:** no extra rules — the colour tokens (`bg-bg-surface`, `text-accent`, `text-text-secondary`, `border-border-default`) flip with the rest of the surface.
 
-### 7.17 Filter Chip _(V2 stub)_
+### 7.17 Filter Chip
 
-Horizontally-scrolling row of single-select pills used inside `/tasks` to filter views.
+Horizontally-scrolling row of single-select pills used inside `/plan` (Tasks segment) to filter views. **Implementation:** `src/components/plan/FilterChipRow.tsx` (M18).
 
 ```
-[ All ]  [ Mine ]  [ Unassigned ]  [ Overdue ]
+[ All ]  [ Mine · 5 ]  [ Unassigned ]  [ Overdue · 3 ]
 ```
 
 - **Owning milestone:** M18
-- **Used by:** M18, future (history filters, activity filters)
-- **Locked basics:** single-select within row. Active chip uses Primary accent background + Text Inverse; inactive uses Background Surface + Text Secondary + 1px border. 32px tall, 12px horizontal padding, 8px gap between chips. Touch target inflated to 44px via invisible padding.
-- **Spec at M18 kickoff:** scroll behaviour at narrow widths, optional count badge (e.g. "Overdue · 3"), dark-mode variant.
+- **Used by:** M18 (Tasks filter), future (history filters, activity filters)
+- **Geometry:** the row sits flush below the segmented control on the Tasks view, `h-12` (48px) with `px-4` horizontal page padding inherited from the column. The chip rail itself is `flex gap-2` inside an `overflow-x-auto` scroller. Chips are `h-8` (32px) with `px-3` horizontal padding; the surrounding scroller's `py-2` provides the invisible top/bottom padding that inflates the tap target to ≥44px without growing the visible chip.
+- **Active state:** `bg-accent`, `text-white`, `font-semibold`. Inactive: `bg-bg-surface`, `text-text-secondary`, `border border-border-default`, `font-medium`. Hover on inactive: `text-text-primary`. Active chips drop the border (the accent background is the affordance). Matches the convention used by `Button` (primary) and `AvatarMenuChip` — `text-white` against `bg-accent` clears 4.5:1 in both themes.
+- **Count badge:** optional `count` prop per chip; when present and `> 0`, renders as `" · {count}"` appended inline to the label (e.g. `Overdue · 3`). Zero counts hide the suffix entirely — never `" · 0"`. Used for **Mine** and **Overdue** in the Tasks view; **All** and **Unassigned** never show counts (All is unbounded by definition; Unassigned would visually shout at empty households on first run).
+- **Scroll behaviour at narrow widths:** the row never wraps. Overflow is horizontal scroll with momentum (`overflow-x-auto`, `overscroll-x-contain`), scrollbar hidden cross-browser (`scrollbar-width: none` + `::-webkit-scrollbar { display: none }` — declared as a `.scrollbar-none` utility in `globals.css`, shared with future filter rows). Chips have `shrink-0` so widths don't compress under pressure. A 1ch right padding on the rail keeps the last chip visually unclipped on iOS Safari.
+- **Selection model:** single-select. The component is controlled — owner state holds the active chip key. Tapping the already-active chip is a no-op (no toggle-off); the "All" chip is the reset affordance.
+- **Reduced motion:** colour transitions on hover/active are `duration-150 ease-out-expo`; the standard `prefers-reduced-motion` reset in `globals.css` collapses them. No bespoke override needed.
+- **Accessibility:** `role="radiogroup"` on the rail with `aria-label` taken from a required prop. Each chip is a `<button role="radio">` with `aria-checked`. Inactive chips are `tabIndex={-1}`; the active one is `tabIndex={0}`. Arrow-Left / Arrow-Right move focus between chips and immediately update selection (standard radiogroup roving-tabindex pattern).
+- **Dark mode:** no extra rules — the colour tokens (`bg-accent`, `bg-bg-surface`, `text-text-secondary`, `border-border-default`) flip with the rest of the surface. The accent stays a fixed green in both themes, so `text-white` remains the inverse-contrast pair.
 
 ### 7.18 Header Bell + Badge _(V2 stub)_
 

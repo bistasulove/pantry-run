@@ -60,7 +60,7 @@
   --color-border-default: #e4e2dc;
 }
 
-/* Respect users who prefer reduced motion — required by CLAUDE.md §19 */
+/* Respect users who prefer reduced motion — required by CLAUDE.md §20 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -78,6 +78,18 @@ body {
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbars on horizontally-scrolling rails (design-system §7.17
+   Filter Chip + future filter rows). Visible scrollbars in the row would
+   shift content vertically on hover (Chrome desktop) and add a ~12px gap
+   below the chips that doesn't match the design. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* Realtime INSERT flash — applied by ListItem to an inline overlay div when

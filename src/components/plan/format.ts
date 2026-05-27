@@ -69,3 +69,92 @@ export function bucketFor(d: Date, now: Date = new Date()): Bucket {
   if (d >= start && d < end) return 'this_week'
   return 'later'
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// M18 — Tasks
+// ────────────────────────────────────────────────────────────────────────────
+
+// Parse a date-only string (YYYY-MM-DD, as stored in tasks.due_date) into a
+// Date pinned to the viewer's local midnight. The DB stores no time, so we
+// must NOT use `new Date(iso)` — that parses as UTC midnight, which renders
+// as "the day before" in any negative-UTC timezone.
+export function parseDueDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map((n) => Number(n))
+  return new Date(y, (m ?? 1) - 1, d ?? 1)
+}
+
+// Returns the count of whole days from `now` (local midnight) to `due` (local
+// midnight). Negative = overdue, 0 = today, 1 = tomorrow, etc.
+export function daysUntilDue(due: Date, now: Date = new Date()): number {
+  const a = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime()
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  return Math.round((a - b) / 86_400_000)
+}
+
+// Compact label shown on the right of a TaskRow.
+//   undated     → ""        (renders as the empty pill, hidden visually)
+//   today       → "Today"
+//   tomorrow    → "Tomorrow"
+//   < 0         → "Overdue · 3d"
+//   < 7         → "Mon"
+//   same year   → "Mon 2 Jun"
+//   other year  → "2 Jun 2027"
+export function formatDueLabel(iso: string | null, now: Date = new Date()): string {
+  if (!iso) return ''
+  const due = parseDueDate(iso)
+  const days = daysUntilDue(due, now)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Tomorrow'
+  if (days < 0) {
+    const n = Math.abs(days)
+    return `Overdue · ${n}d`
+  }
+  if (days < 7) return due.toLocaleDateString(undefined, { weekday: 'short' })
+  const sameYear = due.getFullYear() === now.getFullYear()
+  return due.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: sameYear ? undefined : 'numeric',
+  })
+}
+
+// True if the task is past its due date (date-only comparison in local tz).
+export function isOverdue(iso: string | null, now: Date = new Date()): boolean {
+  if (!iso) return false
+  return daysUntilDue(parseDueDate(iso), now) < 0
+}
+
+// Sort comparator for the Open bucket: due_date asc nulls last, then
+// created_at asc (D7). Stable for equal-due tasks.
+export function compareOpenTasks(
+  a: { due_date: string | null; created_at: string },
+  b: { due_date: string | null; created_at: string },
+): number {
+  if (a.due_date === null && b.due_date === null) {
+    return a.created_at.localeCompare(b.created_at)
+  }
+  if (a.due_date === null) return 1
+  if (b.due_date === null) return -1
+  if (a.due_date !== b.due_date) return a.due_date.localeCompare(b.due_date)
+  return a.created_at.localeCompare(b.created_at)
+}
+
+// Compact "completed Xm/h/d ago" label for the Completed bucket.
+export function formatCompletedAgo(iso: string, now: Date = new Date()): string {
+  const diffMs = now.getTime() - new Date(iso).getTime()
+  const minutes = Math.floor(diffMs / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  const completed = new Date(iso)
+  const sameYear = completed.getFullYear() === now.getFullYear()
+  return completed.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: sameYear ? undefined : 'numeric',
+  })
+}

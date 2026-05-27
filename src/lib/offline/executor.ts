@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { Database } from '@/lib/database.types'
+import { notifyTaskAssignment } from '@/lib/push/client'
 
 import type { QueuedOp } from './queue'
 
@@ -66,6 +67,42 @@ export async function runQueuedOp(client: Client, op: QueuedOp): Promise<ExecRes
 
     if (op.kind === 'delete') {
       const { error } = await client.from('list_items').delete().eq('id', op.id)
+      if (error) return { ok: false, kind: classify(error), error }
+      return { ok: true }
+    }
+
+    // M18 — tasks. Mirror the list_items shape: insert with the full snapshot,
+    // update with the patch, delete by id. RLS gates membership server-side.
+    if (op.kind === 'task_create') {
+      const r = op.row
+      const { error } = await client.from('tasks').insert({
+        id: r.id,
+        household_id: r.household_id,
+        title: r.title,
+        notes: r.notes,
+        assignee_id: r.assignee_id,
+        due_date: r.due_date,
+        is_completed: r.is_completed,
+        completed_at: r.completed_at,
+        completed_by: r.completed_by,
+        created_by: r.created_by ?? undefined,
+      })
+      if (error) return { ok: false, kind: classify(error), error }
+      // Created offline with an assignee → fire the push now that the row
+      // exists server-side. Fire-and-forget per push/client.ts contract.
+      if (r.assignee_id) void notifyTaskAssignment(r.id)
+      return { ok: true }
+    }
+
+    if (op.kind === 'task_update') {
+      const { error } = await client.from('tasks').update(op.patch).eq('id', op.id)
+      if (error) return { ok: false, kind: classify(error), error }
+      if (op.notifyAssignee) void notifyTaskAssignment(op.id)
+      return { ok: true }
+    }
+
+    if (op.kind === 'task_delete') {
+      const { error } = await client.from('tasks').delete().eq('id', op.id)
       if (error) return { ok: false, kind: classify(error), error }
       return { ok: true }
     }

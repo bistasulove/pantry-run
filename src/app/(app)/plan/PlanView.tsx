@@ -9,11 +9,12 @@ import { SegmentedControl } from '@/components/plan/SegmentedControl'
 
 // V2 Plan tab shell. The segmented control's value is mirrored in the URL
 // (?tab=reminders|tasks) so:
-//   - the SW notificationclick deep-link (M16) can land on the right view via
-//     /plan?tab=reminders&focus=<reminder_id>
+//   - the SW notificationclick deep-link (M16/M17/M18) lands on the right
+//     view via /plan?tab=reminders&focus=<id> or /plan?tab=tasks&focus=<id>
 //   - the back button restores the user's last view choice
-// The ?focus query is passed through to PlanRemindersView (Phase 5 opens the
-// edit sheet for that id).
+// The ?focus query is forwarded to whichever sub-view is active; each view
+// opens its edit sheet for that id (PlanRemindersView for reminders,
+// PlanTasksView for tasks).
 
 type PlanTab = 'reminders' | 'tasks'
 
@@ -40,7 +41,8 @@ export function PlanView() {
       } else {
         params.set('tab', next)
       }
-      // Drop ?focus on tab change — it's reminder-specific.
+      // Drop ?focus on tab change — it's view-specific and a focused id from
+      // the previous view won't match anything in the next view's store.
       params.delete('focus')
       const query = params.toString()
       router.replace(query ? `/plan?${query}` : '/plan', { scroll: false })
@@ -52,7 +54,11 @@ export function PlanView() {
     <div className="flex h-full flex-col">
       <SegmentedControl options={OPTIONS} value={tab} onChange={setTab} ariaLabel="Plan view" />
       <div className="flex min-h-0 flex-1 flex-col">
-        {tab === 'reminders' ? <PlanRemindersView focusId={focusId} /> : <PlanTasksView />}
+        {tab === 'reminders' ? (
+          <PlanRemindersView focusId={focusId} />
+        ) : (
+          <PlanTasksView focusId={focusId} />
+        )}
       </div>
     </div>
   )
