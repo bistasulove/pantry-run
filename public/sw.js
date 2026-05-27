@@ -1,7 +1,7 @@
 /**
  * Pantry Run service worker — hand-rolled, no Workbox.
  *
- * Caching contract (CLAUDE.md §17, §21):
+ * Caching contract (CLAUDE.md §18, §22):
  *   - Static build assets (/_next/static/*, fonts, icons, manifest) → cache-first
  *   - HTML navigation requests → network-first with cache fallback (offline shell)
  *   - Anything cross-origin (Supabase, Google Fonts CDN if used) → pass through
@@ -105,7 +105,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
 
   // Cross-origin: Supabase API, Google Fonts CDN, anything else — pass through.
-  // Never cache Supabase responses (CLAUDE.md §17, §21: "always network-first
+  // Never cache Supabase responses (CLAUDE.md §18, §22: "always network-first
   // for data; never cache API responses").
   if (url.origin !== self.location.origin) return
 

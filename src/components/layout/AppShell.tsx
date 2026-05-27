@@ -8,6 +8,7 @@ import { CategoryOverridesRealtime } from '@/components/providers/CategoryOverri
 import { HouseholdListsRealtime } from '@/components/providers/HouseholdListsRealtime'
 import { HouseholdMembersRealtime } from '@/components/providers/HouseholdMembersRealtime'
 import { HouseholdSentryTag } from '@/components/providers/HouseholdSentryTag'
+import { RemindersRealtime } from '@/components/providers/RemindersRealtime'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -30,6 +31,7 @@ export function AppShell({ children }: AppShellProps) {
       <HouseholdMembersRealtime />
       <HouseholdListsRealtime />
       <CategoryOverridesRealtime />
+      <RemindersRealtime />
       <HouseholdSentryTag />
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       <BottomNav />

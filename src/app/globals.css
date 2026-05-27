@@ -60,7 +60,7 @@
   --color-border-default: #e4e2dc;
 }
 
-/* Respect users who prefer reduced motion — required by CLAUDE.md §18 */
+/* Respect users who prefer reduced motion — required by CLAUDE.md §19 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

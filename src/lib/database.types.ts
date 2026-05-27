@@ -34,6 +34,21 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          value: string
+        }
+        Insert: {
+          key: string
+          value: string
+        }
+        Update: {
+          key?: string
+          value?: string
+        }
+        Relationships: []
+      }
       category_overrides: {
         Row: {
           category: string
@@ -170,6 +185,7 @@ export type Database = {
           id: string
           invite_code: string
           name: string
+          timezone: string
         }
         Insert: {
           code_expires_at: string
@@ -177,6 +193,7 @@ export type Database = {
           id?: string
           invite_code: string
           name: string
+          timezone?: string
         }
         Update: {
           code_expires_at?: string
@@ -184,6 +201,7 @@ export type Database = {
           id?: string
           invite_code?: string
           name?: string
+          timezone?: string
         }
         Relationships: []
       }
@@ -334,6 +352,101 @@ export type Database = {
           },
         ]
       }
+      reminder_fires: {
+        Row: {
+          delivery_detail: string | null
+          delivery_status: string
+          fired_at: string
+          household_id: string
+          id: string
+          reminder_id: string
+        }
+        Insert: {
+          delivery_detail?: string | null
+          delivery_status?: string
+          fired_at?: string
+          household_id: string
+          id?: string
+          reminder_id: string
+        }
+        Update: {
+          delivery_detail?: string | null
+          delivery_status?: string
+          fired_at?: string
+          household_id?: string
+          id?: string
+          reminder_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminder_fires_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reminder_fires_reminder_id_fkey"
+            columns: ["reminder_id"]
+            isOneToOne: false
+            referencedRelation: "reminders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reminders: {
+        Row: {
+          assignee_id: string | null
+          created_at: string
+          created_by: string | null
+          household_id: string
+          id: string
+          is_active: boolean
+          lead_minutes: number
+          next_fire_at: string
+          notes: string | null
+          recurrence: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          household_id: string
+          id?: string
+          is_active?: boolean
+          lead_minutes?: number
+          next_fire_at: string
+          notes?: string | null
+          recurrence?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          household_id?: string
+          id?: string
+          is_active?: boolean
+          lead_minutes?: number
+          next_fire_at?: string
+          notes?: string | null
+          recurrence?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminders_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopping_trip_items: {
         Row: {
           added_by_name: string | null
@@ -432,10 +545,11 @@ export type Database = {
     }
     Functions: {
       create_household: {
-        Args: { p_display_name?: string; p_name: string }
+        Args: { p_display_name?: string; p_name: string; p_timezone?: string }
         Returns: Json
       }
       finish_shopping: { Args: { p_list_id: string }; Returns: Json }
+      fire_due_reminders: { Args: never; Returns: number }
       gen_invite_code: { Args: never; Returns: string }
       increment_category_counter: {
         Args: { p_household_id: string; p_kind: string }
@@ -451,8 +565,16 @@ export type Database = {
         Returns: Json
       }
       leave_household: { Args: { p_new_owner_user_id?: string }; Returns: Json }
+      next_fire: {
+        Args: { p_base: string; p_rrule: string; p_tz: string }
+        Returns: string
+      }
       regenerate_invite_code: {
         Args: { p_household_id: string }
+        Returns: Json
+      }
+      set_household_timezone: {
+        Args: { p_household_id: string; p_timezone: string }
         Returns: Json
       }
     }

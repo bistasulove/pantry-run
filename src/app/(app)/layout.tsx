@@ -34,7 +34,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   const [{ data: household }, { data: memberRows }, { data: listRows }] = await Promise.all([
-    supabase.from('households').select('id, name').eq('id', membership.household_id).single(),
+    supabase
+      .from('households')
+      .select('id, name, timezone')
+      .eq('id', membership.household_id)
+      .single(),
     supabase
       .from('household_members')
       .select('user_id, role, display_name, joined_at')
@@ -76,6 +80,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <HouseholdHydrator
       householdId={household.id}
       name={household.name}
+      timezone={household.timezone}
       members={members}
       lists={lists}
       activeListId={activeListId}

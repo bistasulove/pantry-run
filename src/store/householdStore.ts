@@ -17,6 +17,7 @@ export interface ListSummary {
 interface HouseholdStore {
   householdId: string | null
   name: string | null
+  timezone: string | null
   members: Member[]
   lists: ListSummary[]
   activeListId: string | null
@@ -24,10 +25,12 @@ interface HouseholdStore {
   setHousehold: (household: {
     householdId: string
     name: string
+    timezone: string
     members: Member[]
     lists: ListSummary[]
     activeListId: string
   }) => void
+  setTimezone: (timezone: string) => void
   clearHousehold: () => void
 
   setLists: (lists: ListSummary[]) => void
@@ -40,14 +43,23 @@ interface HouseholdStore {
 export const useHouseholdStore = create<HouseholdStore>((set) => ({
   householdId: null,
   name: null,
+  timezone: null,
   members: [],
   lists: [],
   activeListId: null,
 
-  setHousehold: ({ householdId, name, members, lists, activeListId }) =>
-    set({ householdId, name, members, lists, activeListId }),
+  setHousehold: ({ householdId, name, timezone, members, lists, activeListId }) =>
+    set({ householdId, name, timezone, members, lists, activeListId }),
+  setTimezone: (timezone) => set({ timezone }),
   clearHousehold: () =>
-    set({ householdId: null, name: null, members: [], lists: [], activeListId: null }),
+    set({
+      householdId: null,
+      name: null,
+      timezone: null,
+      members: [],
+      lists: [],
+      activeListId: null,
+    }),
 
   setLists: (lists) => set({ lists }),
   setActiveListId: (listId) => set({ activeListId: listId }),

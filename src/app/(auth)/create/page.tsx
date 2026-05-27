@@ -72,9 +72,15 @@ export default function CreatePage() {
       return
     }
     const supabase = createClient()
+    // Auto-detect timezone from the creator's device so a household defaults
+    // to a sensible local zone. The RPC validates against pg_timezone_names
+    // and falls back to 'Australia/Sydney' if the value is unrecognised.
+    const tz =
+      typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined
     const { data, error: rpcError } = await supabase.rpc('create_household', {
       p_name: trimmed,
       p_display_name: displayName,
+      p_timezone: tz,
     })
 
     if (rpcError) {

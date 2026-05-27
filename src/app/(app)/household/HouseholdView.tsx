@@ -3,6 +3,7 @@
 import { InviteCode } from '@/components/household/InviteCode'
 import { RegenerateInviteCodeButton } from '@/components/household/RegenerateInviteCodeButton'
 import { RemoveMemberButton } from '@/components/household/RemoveMemberButton'
+import { TimezoneSection } from '@/components/household/TimezoneSection'
 
 interface HouseholdViewProps {
   id: string
@@ -123,6 +124,8 @@ export function HouseholdView({
           })}
         </ul>
       </section>
+
+      <TimezoneSection />
     </div>
   )
 }

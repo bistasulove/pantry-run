@@ -577,20 +577,25 @@ Used while the list loads on first open or reconnect. Never show a spinner — s
 - Animation: 1.5s shimmer sweep, loops until content loads
 - Show 5–6 skeleton items to fill the screen
 
-### 7.16 Segmented Control _(V2 stub)_
+### 7.16 Segmented Control
 
-Two-way (or N-way) switch used inside `/plan` to toggle between Reminders and Tasks views.
+Two-way (or N-way) switch used inside `/plan` to toggle between Reminders and Tasks views. **Implementation:** `src/components/plan/SegmentedControl.tsx` (M17).
 
 ```
 ┌──────────────────────────┐
 │  Reminders  │   Tasks    │
+│ ━━━━━━━━━━━              │   ← underline indicator slides between segments
 └──────────────────────────┘
 ```
 
-- **Owning milestone:** M17 (first V2 milestone to add a tab)
-- **Used by:** M17 (Reminders / Tasks split inside `/plan`), M18, future
-- **Locked basics:** sits below Header, above the active view content. Active segment uses Primary accent text; inactive uses Text Secondary. Underline indicator slides between segments (250ms `ease-out-expo`). Full segment tap target meets 44px minimum.
-- **Spec at M17 kickoff:** exact heights, border treatment, dark-mode variant, reduced-motion fallback.
+- **Owning milestone:** M17 (first V2 milestone to add a tab).
+- **Used by:** M17 (Reminders / Tasks split inside `/plan`), M18, future.
+- **Geometry:** full-width row sitting flush below the Header. Height 48px (`h-12`). 1px bottom border in `border-border-default/60`. Each segment is a `flex-1` button with `px-3` horizontal padding. Tap target is the full segment cell → ≥44px on every viewport.
+- **Active state:** `text-accent`, `font-semibold`. Inactive: `text-text-secondary`, `font-medium`, hover bumps to `text-text-primary`.
+- **Indicator:** absolutely-positioned 2px tall span anchored to the bottom border, `bg-accent`, `rounded-full`. Width and `left` derive from the active segment's `getBoundingClientRect()` measured against the row. Transitions `left` and `width` over 250ms `ease-out-expo`.
+- **Reduced motion:** the indicator still moves to the right place, but the transition collapses to `0ms` via the standard `@media (prefers-reduced-motion: reduce)` reset in `globals.css` — no per-component override needed.
+- **Accessibility:** `role="tablist"` on the row, `role="tab"` on each segment with `aria-selected`. Inactive segments are `tabIndex={-1}`; the active one is `tabIndex={0}`. The component takes an `ariaLabel` prop (e.g. "Plan view") that becomes the row's `aria-label`.
+- **Dark mode:** no extra rules — the colour tokens (`bg-bg-surface`, `text-accent`, `text-text-secondary`, `border-border-default`) flip with the rest of the surface.
 
 ### 7.17 Filter Chip _(V2 stub)_
 
@@ -618,18 +623,25 @@ Notification entry point on the Header right side. Tap opens the Activity sheet.
 - **Locked basics:** Lucide `Bell` icon, `size={20}`, `strokeWidth={1.5}`. Badge is a small filled pill, top-right of the icon, Primary accent background + Text Inverse, `caption` size. Count caps at "9+". `aria-label="Activity (N unseen)"`. Tap target meets 44px minimum.
 - **Spec at M19 kickoff:** badge animation on increment, dark-mode variant, no-unseen state (badge hidden vs. greyed).
 
-### 7.19 Avatar Menu Chip _(V2 stub)_
+### 7.19 Avatar Menu Chip
 
-Identity chip on the Header right side. Tap opens the More sheet (Household, Settings, Notifications, Sign out).
+Identity chip in the BottomNav's fourth slot (V2 nav refactor — the chip replaced the Settings tab). Tap opens the Avatar menu sheet (Household, Settings, Notifications, Sign out). **Implementation:** `src/components/layout/AvatarMenuChip.tsx` (M17).
 
 ```
-( SR )
+┌──────┐
+│  S   │   ← 36px circle, deterministic tint from user.id
+└──────┘
+  You      ← 12px label, semibold when the menu is open or the user is on /household / /settings
 ```
 
-- **Owning milestone:** M17 (BottomNav refactor lands with M17 as the first V2 tab change)
-- **Used by:** all V2 navigation
-- **Locked basics:** circular chip, 36px diameter, household-derived initials (first letter of the current user's display name, or "?" if unset). Background uses a deterministic muted accent derived from `user.id`. `aria-label="Open menu"`. Tap target meets 44px.
-- **Spec at M17 kickoff:** colour derivation algorithm, fallback when no display name, dark-mode variant, focus ring.
+- **Owning milestone:** M17 (BottomNav refactor lands with M17 as the first V2 tab change).
+- **Used by:** all V2 navigation.
+- **Geometry:** wrapped in the standard BottomNav tab cell (`h-14` × full-width column). The circle is 36px (`h-9 w-9`); the surrounding cell provides the 44px+ tap area. Label sits below the circle, `text-[12px]` with `gap-0.5` from the chip.
+- **Initial:** first character of `displayName.trim().toUpperCase()`, falling back to `?` when unset. No multi-character initials in V2 (display names are often single words).
+- **Background palette:** eight muted tints — `#3D8055` (accent green), `#8C6B3A` (honey), `#7B5EA7` (amethyst), `#2E6F8E` (teal-blue), `#B3553B` (terracotta), `#5D6A4A` (moss), `#A14B6F` (mulberry), `#4F6C8C` (slate-blue). All clear 4.5:1 contrast with `text-white`. Choice is deterministic via `hash(user.id) % 8` so a member's avatar looks the same everywhere they appear.
+- **Active state:** label switches to `text-accent` + `font-semibold` whenever the user is on `/household` or `/settings`, or the menu sheet is open. Otherwise label is `text-text-secondary` + `font-medium`.
+- **Accessibility:** `aria-label="Open menu"`, `aria-haspopup="dialog"`. The circle's letter is `aria-hidden` since it's redundant with the label.
+- **Dark mode:** the eight tints retain enough contrast against the dark surface that no remapping is needed. The white letter stays white in both themes.
 
 ### 7.20 Suggestion Chip Row _(V2 stub)_
 

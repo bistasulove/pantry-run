@@ -843,7 +843,7 @@ The §11.6 M17 "Decisions to ratify" lean is **split** at the data layer (separa
 - Bell button with unseen-activity badge (M19) — new
 - Avatar chip — opens the More sheet (consolidates Household + Settings + Notifications + Sign out)
 
-Both Bell and Avatar follow the 44px tap-target rule (CLAUDE.md §18). The bell badge is a small pill showing count (capped at "9+"), positioned top-right of the icon per the new design-system entry.
+Both Bell and Avatar follow the 44px tap-target rule (CLAUDE.md §19). The bell badge is a small pill showing count (capped at "9+"), positioned top-right of the icon per the new design-system entry.
 
 **`/list` page on-page hierarchy (single banner slot):**
 

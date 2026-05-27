@@ -73,7 +73,9 @@ export function SettingsView() {
 
       <AccountSection />
 
-      <NotificationsSection />
+      <section id="notifications" className="scroll-mt-20">
+        <NotificationsSection />
+      </section>
 
       <LeaveHouseholdSection />
 

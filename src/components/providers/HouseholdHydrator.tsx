@@ -8,6 +8,7 @@ import { useUserStore } from '@/store/userStore'
 interface HouseholdHydratorProps {
   householdId: string
   name: string
+  timezone: string
   members: Member[]
   lists: ListSummary[]
   activeListId: string
@@ -51,6 +52,7 @@ function sameLists(a: ListSummary[], b: ListSummary[]): boolean {
 export function HouseholdHydrator({
   householdId,
   name,
+  timezone,
   members,
   lists,
   activeListId,
@@ -62,7 +64,9 @@ export function HouseholdHydrator({
   // this, returning users have displayName=null until they visit Settings,
   // which silently breaks presence broadcasts.
   useState(() => {
-    useHouseholdStore.getState().setHousehold({ householdId, name, members, lists, activeListId })
+    useHouseholdStore
+      .getState()
+      .setHousehold({ householdId, name, timezone, members, lists, activeListId })
     const self = members.find((m) => m.userId === currentUserId)
     if (self) {
       useUserStore.getState().setDisplayName(self.displayName)
@@ -88,6 +92,7 @@ export function HouseholdHydrator({
     if (
       state.householdId === householdId &&
       state.name === name &&
+      state.timezone === timezone &&
       sameMembers(state.members, members) &&
       sameLists(state.lists, lists)
     ) {
@@ -103,6 +108,7 @@ export function HouseholdHydrator({
     state.setHousehold({
       householdId,
       name,
+      timezone,
       members,
       lists,
       activeListId: preservedActiveId,
@@ -111,7 +117,7 @@ export function HouseholdHydrator({
     if (self) {
       useUserStore.getState().setDisplayName(self.displayName)
     }
-  }, [householdId, name, members, lists, activeListId, currentUserId])
+  }, [householdId, name, timezone, members, lists, activeListId, currentUserId])
 
   return <>{children}</>
 }
