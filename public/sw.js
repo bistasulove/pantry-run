@@ -139,7 +139,8 @@ self.addEventListener('fetch', (event) => {
 //   kind is one of:
 //     'reminder' (M17) → opens /plan?tab=reminders&focus=<target_id>
 //     'task'     (M18) → opens /plan?tab=tasks&focus=<target_id>
-//     'test'     (M16 dev seam) → opens /list
+//
+// Any other / missing kind falls back to /list.
 //
 // tag = `${kind}:${target_id}` so re-fires for the same target replace the
 // previous notification instead of stacking. Without a tag, every fire would

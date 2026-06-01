@@ -616,7 +616,9 @@ Horizontally-scrolling row of single-select pills used inside `/plan` (Tasks seg
 - **Accessibility:** `role="radiogroup"` on the rail with `aria-label` taken from a required prop. Each chip is a `<button role="radio">` with `aria-checked`. Inactive chips are `tabIndex={-1}`; the active one is `tabIndex={0}`. Arrow-Left / Arrow-Right move focus between chips and immediately update selection (standard radiogroup roving-tabindex pattern).
 - **Dark mode:** no extra rules — the colour tokens (`bg-accent`, `bg-bg-surface`, `text-text-secondary`, `border-border-default`) flip with the rest of the surface. The accent stays a fixed green in both themes, so `text-white` remains the inverse-contrast pair.
 
-### 7.18 Header Bell + Badge _(V2 stub)_
+### 7.18 Header Bell + Badge _(🚫 Deprioritised — V2 stub retained for reference)_
+
+> **Status (2026-05-31):** Deprioritised with M19. No user demand for an Activity surface in the post-M18 userbase; building the bell would be the entry point to a feature nobody asked for. Stub kept below as a reference if Activity is ever revisited in V2.1+.
 
 Notification entry point on the Header right side. Tap opens the Activity sheet.
 
@@ -624,10 +626,10 @@ Notification entry point on the Header right side. Tap opens the Activity sheet.
 🔔 (3)
 ```
 
-- **Owning milestone:** M19
-- **Used by:** M19 (Activity unseen-count)
+- **Owning milestone:** M19 _(deprioritised)_
+- **Used by:** M19 (Activity unseen-count) _(deprioritised)_
 - **Locked basics:** Lucide `Bell` icon, `size={20}`, `strokeWidth={1.5}`. Badge is a small filled pill, top-right of the icon, Primary accent background + Text Inverse, `caption` size. Count caps at "9+". `aria-label="Activity (N unseen)"`. Tap target meets 44px minimum.
-- **Spec at M19 kickoff:** badge animation on increment, dark-mode variant, no-unseen state (badge hidden vs. greyed).
+- **Spec at M19 kickoff:** badge animation on increment, dark-mode variant, no-unseen state (badge hidden vs. greyed). _(N/A — milestone deprioritised.)_
 
 ### 7.19 Avatar Menu Chip
 
@@ -649,7 +651,9 @@ Identity chip in the BottomNav's fourth slot (V2 nav refactor — the chip repla
 - **Accessibility:** `aria-label="Open menu"`, `aria-haspopup="dialog"`. The circle's letter is `aria-hidden` since it's redundant with the label.
 - **Dark mode:** the eight tints retain enough contrast against the dark surface that no remapping is needed. The white letter stays white in both themes.
 
-### 7.20 Suggestion Chip Row _(V2 stub)_
+### 7.20 Suggestion Chip Row _(🚫 Deprioritised — V2 stub retained for reference)_
+
+> **Status (2026-05-31):** Deprioritised with M19. No user demand for smart suggestions; the post-M18 userbase praises how minimal the `/list` surface stays. Stub kept below as a reference if revisited in V2.1+.
 
 Subtle one-line affordance above the AddItemBar on `/list`, surfacing items the household usually buys.
 
@@ -657,10 +661,10 @@ Subtle one-line affordance above the AddItemBar on `/list`, surfacing items the 
 You usually buy: Milk · Bread · Eggs                ✕
 ```
 
-- **Owning milestone:** M19
-- **Used by:** M19
+- **Owning milestone:** M19 _(deprioritised)_
+- **Used by:** M19 _(deprioritised)_
 - **Locked basics:** single line of `body-sm` text in Text Secondary. Inline item names are tap targets (each pads to 44px height via invisible padding). `✕` dismisses for 14 days. **Not** a banner; sits in its own slot above the AddItemBar, below list content. Collapses with the keyboard via Visual Viewport API.
-- **Spec at M19 kickoff:** truncation rules (show up to N names, "+M more" overflow), dark-mode variant, max-line-length on tablet widths, "Make X a staple?" copy variant when frequency is ≥ 4 trips in 90 days.
+- **Spec at M19 kickoff:** truncation rules (show up to N names, "+M more" overflow), dark-mode variant, max-line-length on tablet widths, "Make X a staple?" copy variant when frequency is ≥ 4 trips in 90 days. _(N/A — milestone deprioritised.)_
 
 ---
 

@@ -23,7 +23,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 // a counted failure, but doesn't throw — one bad device shouldn't sink the
 // whole fan-out.
 
-export type PushKind = 'reminder' | 'task' | 'test'
+export type PushKind = 'reminder' | 'task'
 
 export type PushPayload = {
   title: string

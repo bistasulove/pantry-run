@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/Button'
 import { Toast, type ToastOptions } from '@/components/ui/Toast'
 import { usePushNotifications, type PushDevice } from '@/hooks/usePushNotifications'
 
-const isDev = process.env.NODE_ENV !== 'production'
-
 function formatJoinedDate(iso: string | null): string {
   if (!iso) return ''
   const date = new Date(iso)
@@ -16,7 +14,7 @@ function formatJoinedDate(iso: string | null): string {
 }
 
 export function NotificationsSection() {
-  const { status, devices, thisDeviceId, subscribe, unsubscribe, removeDevice, sendTest, error } =
+  const { status, devices, thisDeviceId, subscribe, unsubscribe, removeDevice, error } =
     usePushNotifications()
   const [toast, setToast] = useState<ToastOptions | null>(null)
   const [busy, setBusy] = useState(false)
@@ -103,39 +101,13 @@ export function NotificationsSection() {
             disabled={busy}
             onRemove={(id) => withBusy('Device removed', () => removeDevice(id))}
           />
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => withBusy('Notifications turned off', unsubscribe)}
-              disabled={busy}
-            >
-              Turn off on this device
-            </Button>
-            {isDev && (
-              <Button
-                variant="ghost"
-                onClick={async () => {
-                  if (busy) return
-                  setBusy(true)
-                  try {
-                    const result = await sendTest()
-                    setToast({
-                      message: `Sent: ${result.sent}, expired: ${result.expired}, failed: ${result.failed}`,
-                    })
-                  } catch (err) {
-                    setToast({
-                      message: err instanceof Error ? err.message : 'Test failed',
-                    })
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-                disabled={busy}
-              >
-                Send test notification
-              </Button>
-            )}
-          </div>
+          <Button
+            variant="secondary"
+            onClick={() => withBusy('Notifications turned off', unsubscribe)}
+            disabled={busy}
+          >
+            Turn off on this device
+          </Button>
         </>
       )}
 

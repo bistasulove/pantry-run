@@ -820,7 +820,7 @@ V2 has six milestones, themed **Household Coordination**. Each is independently 
 
 ### 11.6.1 V2 UI & Navigation Strategy
 
-V2 introduces three new feature surfaces (Reminders, Tasks, Activity). Naively mapping each to a BottomNav tab would push the tab count from 4 to 7 — a clutter regression the design philosophy ("Invisible Design" — `docs/design_document_guidelines.md` §1.1; reference apps Things 3, Linear, Notion) does not survive. This subsection locks the UI strategy before code starts so M17–M19 implement to a shared frame.
+V2 introduces two new feature surfaces (Reminders, Tasks). Naively mapping each to a BottomNav tab would push the tab count from 4 to 6 — a clutter regression the design philosophy ("Invisible Design" — `docs/design_document_guidelines.md` §1.1; reference apps Things 3, Linear, Notion) does not survive. This subsection locks the UI strategy before code starts so M17 and M18 implement to a shared frame. (Originally this also covered an Activity surface for M19; M19 was deprioritised post-M18 — see §M19 — so the Activity bell + sheet and the suggestion chip row are no longer planned. Header right-side now lands only the Avatar chip.)
 
 **BottomNav (4 tabs, unchanged count):**
 
@@ -831,7 +831,7 @@ V2 introduces three new feature surfaces (Reminders, Tasks, Activity). Naively m
 | History | Clock    | Unchanged — M12 shopping history                               |
 | More    | Avatar   | Sheet with Household, Settings, Notifications, Sign out        |
 
-Activity (M19) is **not** a BottomNav tab. It becomes a Bell button in the Header with an unseen-count badge; tap opens an Activity sheet (overlay, not a full route). Rationale: activity is passive consumption — sheet pattern fits, and matches Slack / GitHub / Linear conventions where the notification surface lives in the Header, not the tab bar.
+Activity (M19) was originally planned as a Header bell + sheet overlay. **Deprioritised 2026-05-31** — no user demand and contradicts the "minimal" signal users praise. The Header right side now contains only the Avatar chip.
 
 **Plan tab — unified UI, split data:**
 
@@ -840,10 +840,10 @@ The §11.6 M17 "Decisions to ratify" lean is **split** at the data layer (separa
 **Header (new right side):**
 
 - Household name + list switcher (left) — unchanged
-- Bell button with unseen-activity badge (M19) — new
+- ~~Bell button with unseen-activity badge (M19)~~ — _deprioritised, not shipping_
 - Avatar chip — opens the More sheet (consolidates Household + Settings + Notifications + Sign out)
 
-Both Bell and Avatar follow the 44px tap-target rule (CLAUDE.md §20). The bell badge is a small pill showing count (capped at "9+"), positioned top-right of the icon per the new design-system entry.
+Avatar follows the 44px tap-target rule (CLAUDE.md §20).
 
 **`/list` page on-page hierarchy (single banner slot):**
 
@@ -855,19 +855,19 @@ At most **one** system banner is rendered at a time on `/list`. Priority order, 
 4. Save-your-account banner (M9 — 7-day re-show)
 5. Staple-hint toast (M11 — first staple-toggle only)
 
-Smart suggestions chip row (M19) is **not** a banner — it lives above AddItemBar, below the list content, as a single text-line affordance (no chip backgrounds; `text-text-secondary` with inline action labels). Only rendered when signal is real (≥3 trips) and not dismissed. Collapses with the existing Visual Viewport keyboard handler.
+~~Smart suggestions chip row (M19) is **not** a banner — it lives above AddItemBar, below the list content, as a single text-line affordance.~~ **Deprioritised 2026-05-31** — no user demand; spec retained in §M19 for reference only.
 
 **New design-system entries (`docs/design_document_guidelines.md` §7):**
 
 Stub entries added now at V2 kickoff. Full visual specs filled in at the relevant Mx kickoff.
 
-| Component           | Stub  | Owning milestone         | Used by  |
-| ------------------- | ----- | ------------------------ | -------- |
-| Segmented control   | §7.16 | M17 (Plan tab)           | M17, M18 |
-| Filter chip         | §7.17 | M18 (Tasks filter)       | M18      |
-| Header bell + badge | §7.18 | M19                      | M19      |
-| Avatar menu chip    | §7.19 | M17 (BottomNav refactor) | All V2   |
-| Suggestion chip row | §7.20 | M19                      | M19      |
+| Component           | Stub  | Owning milestone         | Used by  | Status           |
+| ------------------- | ----- | ------------------------ | -------- | ---------------- |
+| Segmented control   | §7.16 | M17 (Plan tab)           | M17, M18 | ✅ Shipped (M17) |
+| Filter chip         | §7.17 | M18 (Tasks filter)       | M18      | ✅ Shipped (M18) |
+| Header bell + badge | §7.18 | M19                      | M19      | 🚫 Deprioritised |
+| Avatar menu chip    | §7.19 | M17 (BottomNav refactor) | All V2   | ✅ Shipped (M17) |
+| Suggestion chip row | §7.20 | M19                      | M19      | 🚫 Deprioritised |
 
 **BottomNav migration:**
 
@@ -876,7 +876,6 @@ The 4-tab → 4-tab restructure lands as part of M17 (the first V2 milestone tha
 **What this does _not_ solve (accepted tradeoffs):**
 
 - The Plan tab's segmented control adds one indirection vs. a hypothetical dedicated Reminders or Tasks tab. Acceptable: the segmented control is one tap, both views share the same `/plan` shell, and the trade buys us a clean tab count.
-- The Activity sheet means users can't deep-link to a specific activity item from outside the app. Acceptable: activity items aren't durable references. Push notifications for reminders or tasks deep-link directly to `/reminders?focus=X` or `/tasks?focus=X`, not to the activity sheet.
 
 ---
 
@@ -997,13 +996,15 @@ Migrates users off the "Todos" list workaround. Similar shape to reminders but n
 
 ---
 
-### M19 — Activity Feed + Smart Suggestions
+### M19 — Activity Feed + Smart Suggestions 🚫 _Deprioritised (2026-05-31)_
 
-**~4–5 days**
+> **Status: Deprioritised — not shipping in V2.** After M18 shipped (2026-05-28), post-launch feedback from the now ~25-household userbase has been overwhelmingly positive about how minimal and intuitive the app stays. There is **zero demand** for either an activity feed or smart suggestions — the two surfaces this milestone was scoped to add. Building them would directly contradict the "minimal" signal users are praising, so M19 is dropped from the V2 roadmap.
+>
+> The deliverables below are kept for reference (the schema sketch, the activity-writer trigger pattern, the staple-upsell hook, the design-system stubs at §7.18 and §7.20) in case future feedback reverses this. Revisit only if multiple users start asking for "who added what" visibility or "remind me what I usually buy" prompts — neither has surfaced yet.
+>
+> M20 (V2 Launch) proceeds with a trimmed scope: no Activity surface to QA, no suggestion chip row, release notes drop the "Activity" and "Smart suggestions" sections (becomes four sections, not six).
 
-The original V2 features from §12. Lower priority than reminders/tasks (no direct user demand) but high payoff once those primitives exist — both feed off the data they produce.
-
-**Deliverables:**
+**Deliverables _(retained for future reference — not shipping):_**
 
 - **Activity feed schema:** new `household_activity` table — `id`, `household_id`, `actor_id`, `actor_name_snapshot` (text), `kind` (text: `'item_added'` | `'item_checked'` | `'trip_finished'` | `'reminder_fired'` | `'task_completed'` | `'task_assigned'` | `'member_joined'`), `target_id` (text, polymorphic), `target_label_snapshot` (text — item name, reminder title, etc.), `created_at`. Append-only. RLS: household members SELECT only.
 - **Activity writers:** `AFTER` triggers on `list_items`, `shopping_trips`, `reminder_fires`, `tasks`, `household_members` to insert activity rows. Decision at kickoff: triggers vs. application-side writes (lean: triggers — single source of truth, can't be forgotten).
@@ -1022,11 +1023,11 @@ The original V2 features from §12. Lower priority than reminders/tasks (no dire
 
 **~3–4 days**
 
-Mirrors M14 for V2 — real-device sweep, Lighthouse audit, cross-browser, V2-specific edge cases. Larger surface than M14 because V2 introduces three new tabs (Reminders, Tasks, Activity) and one new piece of infrastructure (push).
+Mirrors M14 for V2 — real-device sweep, Lighthouse audit, cross-browser, V2-specific edge cases. (Original scope assumed three new tabs incl. Activity; with M19 deprioritised the V2 surface is two new feature areas — Reminders, Tasks — and one new piece of infrastructure (push). Scope below trimmed accordingly.)
 
 **Deliverables:**
 
-- Full happy-path on real devices across the new flows: smarter categories (online + offline + override) → enable push notifications → create + receive a reminder → create + assign + complete a task → view activity → accept + dismiss a smart suggestion.
+- Full happy-path on real devices across the new flows: smarter categories (online + offline + override) → enable push notifications → create + receive a reminder → create + assign + complete a task.
 - V2-specific edge cases:
   - Push permission denied or revoked mid-session — UI reflects state; orphan server subscription cleaned up on next send (410/404 sweep).
   - Recurring reminder fires while every device is offline — notification arrives on next device reconnect (best effort; document Web Push retention per browser).
@@ -1034,12 +1035,10 @@ Mirrors M14 for V2 — real-device sweep, Lighthouse audit, cross-browser, V2-sp
   - DST transition — Thursday reminder still fires Thursday in household timezone.
   - Task assignee leaves household — shown as former member, task reassignable.
   - Smart-category Edge Function rate-limit hit — graceful "Other" fallback, no error UX.
-  - Activity feed for households with no actions yet — empty state.
-  - Smart suggestion dismissed — does not reappear for 14 days.
-- Lighthouse audit on V2 routes (`/list`, `/reminders`, `/tasks`, `/activity`): Performance ≥ 85, Accessibility ≥ 90, Best Practices ≥ 90, PWA ✓.
+- Lighthouse audit on V2 routes (`/list`, `/plan`): Performance ≥ 85, Accessibility ≥ 90, Best Practices ≥ 90, PWA ✓.
 - Cross-browser sweep: Chrome (Android), Safari (iOS 16.4+ installed PWA), Chrome (desktop), Safari (desktop), Firefox (desktop). Push-notification delivery tested explicitly on each.
 - Sentry confirmed receiving events for: reminder cron failures (server-side), push send failures (transient 410/404), Edge Function categorisation failures and rate-limit hits.
-- `docs/release-notes/v2.md` drafted per the M14 pattern. Six household-friendly sections (Smarter categories, Notifications, Reminders, Tasks, Activity, Smart suggestions) plus a "We heard you" section calling out each piece of post-V1.1 feedback and where it landed.
+- `docs/release-notes/v2.md` drafted per the M14 pattern. Four household-friendly sections (Smarter categories, Notifications, Reminders, Tasks) plus a "We heard you" section calling out each piece of post-V1.1 feedback and where it landed.
 - `docs/m20_test_plan.md` written at kickoff per the M14 pattern.
 - Dev seams removed: the M16 `/api/push/test` route deleted in M20 close-out.
 
@@ -1050,15 +1049,15 @@ Mirrors M14 for V2 — real-device sweep, Lighthouse audit, cross-browser, V2-sp
 ### M15–M20 Summary
 
 | Milestone | Focus                             | Est. Days | Cumulative |
-| --------- | --------------------------------- | --------- | ---------- |
+| --------- | --------------------------------- | --------- | ---------- | --------------------------------------- |
 | M15       | Smarter Categories                | 4–5       | 5          |
 | M16       | Push Notifications Infrastructure | 3–4       | 9          |
 | M17       | Household Reminders               | 5–6       | 15         |
 | M18       | Household Tasks                   | 4–5       | 20         |
-| M19       | Activity Feed + Smart Suggestions | 4–5       | 25         |
-| M20       | QA, Edge Cases & V2 Launch        | 3–4       | 29         |
+| M19       | Activity Feed + Smart Suggestions | —         | —          | 🚫 Deprioritised 2026-05-31 (no demand) |
+| M20       | QA, Edge Cases & V2 Launch        | 3–4       | 24         |
 
-**Total: ~5–6 weeks** working evenings and weekends as a solo developer. Larger than V1.1 (~3–4 weeks) because V2 introduces three new tabs plus push infrastructure.
+**Total: ~4–5 weeks** working evenings and weekends as a solo developer (revised down from ~5–6 weeks after M19 was deprioritised). V2 ships with two new feature surfaces (Plan tab: Reminders + Tasks) plus push infrastructure.
 
 > **Note on positioning.** If V2 ships, "Pantry Run" undersells the product — the app becomes a household coordination tool with shopping as the flagship feature. Renaming is a meaningful decision (icon, manifest, domain, App Store strategy when V3 ships native). Decide at M17 / M18 kickoff when the new primitives are concrete, not now.
 
@@ -1066,7 +1065,7 @@ Mirrors M14 for V2 — real-device sweep, Lighthouse audit, cross-browser, V2-sp
 
 > **Note on deferred feedback.** Budget tracking (feedback #2) already sits in V4 (§12) — revisit at V3 kickoff once monetisation is live. Cross-store price comparison (feedback #4) is not scoped — requires either user-supplied price entry (unlikely to be sustained) or third-party price APIs per store (commercial agreements). Revisit only if multiple V2 users ask.
 
-> **Note on V2.1 candidates.** Custom RRULE input (M17), recurring tasks (M18), and a richer activity feed with filter/search (M19) are all natural V2.1 follow-ups. Defer until V2 ships and post-V2 feedback surfaces what's actually missing.
+> **Note on V2.1 candidates.** Custom RRULE input (M17) and recurring tasks (M18) are the natural V2.1 follow-ups. Defer until V2 ships and post-V2 feedback surfaces what's actually missing. (Activity feed and smart suggestions — the former M19 scope — are not on this list: deprioritised 2026-05-31 with no user demand. Revisit only if multiple users start asking for "who added what" or "remind me what I usually buy" prompts.)
 
 ---
 
@@ -1091,7 +1090,7 @@ V2 — Household Coordination (Months 4–6)  -- reshaped from post-V1.1 feedbac
   └── Push notifications infrastructure (Web Push for installed PWAs)
   └── Household reminders (bin day, rent day — scheduled + push)
   └── Household tasks / chores (mow lawn, plumbing — tracked completion)
-  └── Activity feed + smart suggestions (deferred from original V2 list)
+  └── Activity feed + smart suggestions — DEPRIORITISED 2026-05-31 (no user demand)
   └── Native port deferred to V3 — validate household-coordination value prop on PWA first
 
 V3 — Native App + Monetisation (Months 7–12)

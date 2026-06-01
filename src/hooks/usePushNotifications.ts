@@ -41,7 +41,6 @@ interface UsePushNotificationsResult {
   subscribe: () => Promise<void>
   unsubscribe: () => Promise<void>
   removeDevice: (id: string) => Promise<void>
-  sendTest: () => Promise<{ sent: number; expired: number; failed: number }>
   error: string | null
 }
 
@@ -314,17 +313,6 @@ export function usePushNotifications(): UsePushNotificationsResult {
     [devices, thisEndpoint, refreshDevices],
   )
 
-  const sendTest = useCallback(async () => {
-    setError(null)
-    const res = await fetch('/api/push/test', { method: 'POST' })
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '')
-      throw new Error(`test failed: ${res.status} ${detail}`)
-    }
-    const body = (await res.json()) as { sent: number; expired: number; failed: number }
-    return body
-  }, [])
-
   const thisDeviceId = useMemo(() => {
     if (!thisEndpoint) return null
     return devices.find((d) => d.endpoint === thisEndpoint)?.id ?? null
@@ -337,7 +325,6 @@ export function usePushNotifications(): UsePushNotificationsResult {
     subscribe,
     unsubscribe,
     removeDevice,
-    sendTest,
     error,
   }
 }

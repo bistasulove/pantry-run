@@ -22,37 +22,37 @@ Full design system: `docs/design_document_guidelines.md`
 ## 2. Current Milestone
 
 ```
-ACTIVE: none — M18 shipped; V2 continuing, awaiting M19 kickoff
+ACTIVE: none — V2 shipped 2026-06-01 (M15→M18 + M20 QA; M19 deprioritised). V2.1 candidates: custom RRULE input, recurring tasks. Activity / suggestions only revisited on explicit user demand.
 ```
 
 Update this line when starting a new milestone. V1 milestone definitions are in `docs/plan.md` Section 11; V1.1 in Section 11.5; V2 in Section 11.6.
 
-| #                               | Milestone                             | Status     |
-| ------------------------------- | ------------------------------------- | ---------- |
-| M0                              | Scaffold & Infrastructure             | ✅ Done    |
-| M1                              | Guest Auth & Session Persistence      | ✅ Done    |
-| M2                              | Household Create & Join               | ✅ Done    |
-| M3                              | Shopping List Core (CRUD)             | ✅ Done    |
-| M3.5                            | Testing & Feedback                    | ✅ Done    |
-| M4                              | Real-Time Sync                        | ✅ Done    |
-| M5                              | Offline Support                       | ✅ Done    |
-| M6                              | PWA Polish & Install                  | ✅ Done    |
-| M7                              | QA, Edge Cases & Launch               | ✅ Done    |
-| **V1.1 — Continuity & Trust**   |                                       |            |
-| M8                              | Item Quantity & Notes                 | ✅ Done    |
-| M9                              | Full Account Upgrade (Email)          | ✅ Done    |
-| M10                             | Multiple Lists per Household          | ✅ Done    |
-| M11                             | Recurring / Staple Items + Trip Model | ✅ Done    |
-| M12                             | Shopping History                      | ✅ Done    |
-| M13                             | Sentry & Observability                | ✅ Done    |
-| M14                             | QA, Edge Cases & V1.1 Launch          | ✅ Done    |
-| **V2 — Household Coordination** |                                       |            |
-| M15                             | Smarter Categories                    | ✅ Done    |
-| M16                             | Push Notifications Infrastructure     | ✅ Done    |
-| M17                             | Household Reminders                   | ✅ Done    |
-| M18                             | Household Tasks                       | ✅ Done    |
-| M19                             | Activity Feed + Smart Suggestions     | 📋 Planned |
-| M20                             | QA, Edge Cases & V2 Launch            | 📋 Planned |
+| #                               | Milestone                             | Status                                                                                                                          |
+| ------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| M0                              | Scaffold & Infrastructure             | ✅ Done                                                                                                                         |
+| M1                              | Guest Auth & Session Persistence      | ✅ Done                                                                                                                         |
+| M2                              | Household Create & Join               | ✅ Done                                                                                                                         |
+| M3                              | Shopping List Core (CRUD)             | ✅ Done                                                                                                                         |
+| M3.5                            | Testing & Feedback                    | ✅ Done                                                                                                                         |
+| M4                              | Real-Time Sync                        | ✅ Done                                                                                                                         |
+| M5                              | Offline Support                       | ✅ Done                                                                                                                         |
+| M6                              | PWA Polish & Install                  | ✅ Done                                                                                                                         |
+| M7                              | QA, Edge Cases & Launch               | ✅ Done                                                                                                                         |
+| **V1.1 — Continuity & Trust**   |                                       |                                                                                                                                 |
+| M8                              | Item Quantity & Notes                 | ✅ Done                                                                                                                         |
+| M9                              | Full Account Upgrade (Email)          | ✅ Done                                                                                                                         |
+| M10                             | Multiple Lists per Household          | ✅ Done                                                                                                                         |
+| M11                             | Recurring / Staple Items + Trip Model | ✅ Done                                                                                                                         |
+| M12                             | Shopping History                      | ✅ Done                                                                                                                         |
+| M13                             | Sentry & Observability                | ✅ Done                                                                                                                         |
+| M14                             | QA, Edge Cases & V1.1 Launch          | ✅ Done                                                                                                                         |
+| **V2 — Household Coordination** |                                       |                                                                                                                                 |
+| M15                             | Smarter Categories                    | ✅ Done                                                                                                                         |
+| M16                             | Push Notifications Infrastructure     | ✅ Done                                                                                                                         |
+| M17                             | Household Reminders                   | ✅ Done                                                                                                                         |
+| M18                             | Household Tasks                       | ✅ Done                                                                                                                         |
+| M19                             | Activity Feed + Smart Suggestions     | 🚫 Deprioritised — no user demand; "minimal and intuitive" is the loudest post-M18 signal (2026-05-31). See `docs/plan.md` §M19 |
+| M20                             | QA, Edge Cases & V2 Launch            | ✅ Done                                                                                                                         |
 
 ---
 
